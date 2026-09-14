@@ -1,121 +1,52 @@
 import { Link } from 'react-router-dom';
+import { Sun, ScanLine, CloudSun, FlaskConical, Sprout, ArrowRight } from 'lucide-react';
 
-function Dashboard({ backendStatus }) {
-  const quickStats = [
-    { label: 'Weather', value: '28°C', sub: 'Humidity 78%' },
-    { label: 'Disease Risk', value: 'Low', sub: 'Based on recent scans' },
-    { label: 'Est. Yield', value: '—', sub: 'Run prediction to see' },
-  ];
-
+function Dashboard() {
   const modules = [
-    {
-      icon: '🌱',
-      title: 'Crop Recommendation',
-      desc: 'Get the best crop suggestion based on your soil and climate data.',
-      button: 'Recommend Crop',
-      path: '/crop-recommendation',
-    },
-    {
-      icon: '🔬',
-      title: 'Disease Detection',
-      desc: 'Upload a leaf photo to identify plant diseases early.',
-      button: 'Detect Disease',
-      path: '/disease-detection',
-    },
-    {
-      icon: '⛅',
-      title: 'Weather Advisory',
-      desc: 'Farming advice based on live weather conditions.',
-      button: 'Check Weather',
-      path: '/weather-advisory',
-    },
-    {
-      icon: '🧪',
-      title: 'Fertilizer & Treatment',
-      desc: 'Recommended fertilizer and treatment for your crop.',
-      button: 'Get Recommendation',
-      path: '/fertilizer-treatment',
-    },
-    {
-      icon: '🌾',
-      title: 'Yield Prediction',
-      desc: 'Predict expected crop yield using AI.',
-      button: 'Predict Yield',
-      path: '/yield-profit',
-    },
-    {
-      icon: '💰',
-      title: 'Profit Prediction',
-      desc: 'Estimate expected farming profit.',
-      button: 'Predict Profit',
-      path: '/yield-profit',
-    },
-    {
-      icon: '🤖',
-      title: 'AI Farming Assistant',
-      desc: 'Ask farming questions and get intelligent guidance.',
-      button: 'Ask Assistant',
-      path: '/ai-assistant',
-    },
+    { icon: ScanLine, label: 'Disease Scan', path: '/disease-detection' },
+    { icon: CloudSun, label: 'Weather', path: '/weather-advisory' },
+    { icon: FlaskConical, label: 'Fertilizer', path: '/fertilizer-treatment' },
   ];
 
   return (
-    <div>
-      <div className="mb-8">
-        <h2 className="text-3xl font-serif font-bold text-stone-800">
-          Farmer Dashboard
-        </h2>
-        <p className="text-stone-500 mt-1">
-          Your farm's decision-support overview, in one place.
-        </p>
-        <p className="text-xs text-stone-400 mt-2">
-          Backend:{' '}
-          <span
-            className={
-              backendStatus === 'healthy' ? 'text-green-600' : 'text-red-500'
-            }
-          >
-            {backendStatus}
-          </span>
-        </p>
+    <div className="max-w-3xl">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-10 h-10 rounded-full bg-[#DCE8C8] flex items-center justify-center">
+          <Sun size={20} strokeWidth={1.8} className="text-[#5B7A3A]" />
+        </div>
+        <div>
+          <div className="font-serif text-[19px] text-[#2E3B22] font-medium">Good morning, Farmer</div>
+          <div className="text-xs text-[#7A8A6A]">Maharashtra</div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
-        {quickStats.map((stat) => (
-          <div
-            key={stat.label}
-            className="bg-white rounded-2xl border border-stone-200 px-5 py-4"
-          >
-            <p className="text-xs uppercase tracking-wide text-stone-400">
-              {stat.label}
-            </p>
-            <p className="text-2xl font-serif font-bold text-stone-800 mt-1">
-              {stat.value}
-            </p>
-            <p className="text-xs text-stone-400 mt-1">{stat.sub}</p>
-          </div>
-        ))}
-      </div>
+      <Link
+        to="/crop-recommendation"
+        className="block bg-white rounded-3xl p-8 mb-4 text-center hover:shadow-sm transition"
+      >
+        <div className="w-12 h-12 rounded-full bg-[#DCE8C8] flex items-center justify-center mx-auto mb-3">
+          <Sprout size={22} strokeWidth={1.8} className="text-[#5B7A3A]" />
+        </div>
+        <div className="font-serif text-lg text-[#2E3B22] font-medium">
+          Ready to plan your next crop?
+        </div>
+        <div className="text-xs text-[#7A8A6A] mt-1 mb-5">Takes about a minute</div>
+        <span className="inline-flex items-center gap-1.5 bg-[#5B7A3A] text-white text-sm px-6 py-2.5 rounded-full">
+          Start now <ArrowRight size={14} />
+        </span>
+      </Link>
 
-      <h3 className="text-lg font-semibold text-stone-700 mb-4">Modules</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {modules.map((mod) => (
-          <div
-            key={mod.title}
-            className="bg-white rounded-2xl border border-stone-200 p-6 hover:border-amber-400 hover:shadow-md transition"
+      <div className="text-xs text-[#7A8A6A] mb-3 uppercase tracking-wide">Explore modules</div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {modules.map((m) => (
+          <Link
+            key={m.label}
+            to={m.path}
+            className="bg-[#EFE7D8] rounded-2xl p-4 text-center hover:bg-[#E5DCC8] transition"
           >
-            <div className="text-3xl mb-3">{mod.icon}</div>
-            <h3 className="font-serif text-lg font-semibold text-stone-800">
-              {mod.title}
-            </h3>
-            <p className="text-stone-500 text-sm mt-1 mb-5">{mod.desc}</p>
-            <Link
-              to={mod.path}
-              className="inline-block bg-stone-900 text-white text-sm px-4 py-2 rounded-lg hover:bg-amber-600 transition"
-            >
-              {mod.button}
-            </Link>
-          </div>
+            <m.icon size={20} strokeWidth={1.8} className="text-[#8A7A5C] mx-auto" />
+            <div className="text-xs text-[#2E3B22] mt-2">{m.label}</div>
+          </Link>
         ))}
       </div>
     </div>
