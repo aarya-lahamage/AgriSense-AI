@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { MapPin, Thermometer, Droplets, CloudRain, Sprout, Navigation } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import CropCalendar from '../components/CropCalendar';
 
 const API_BASE = 'http://127.0.0.1:8000';
 
@@ -24,6 +26,8 @@ function getFieldError(name, value) {
 }
 
 function CropRecommendation() {
+  const { token } = useAuth();
+
   const [form, setForm] = useState({
     N: '', P: '', K: '', temperature: '', humidity: '', ph: '', rainfall: '',
   });
@@ -129,7 +133,10 @@ function CropRecommendation() {
 
       const res = await fetch(`${API_BASE}/predict/crop`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error('Prediction failed');
@@ -180,10 +187,7 @@ function CropRecommendation() {
               <input
                 type="text"
                 value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setShowSuggestions(true);
-                }}
+                onChange={(e) => { setQuery(e.target.value); setShowSuggestions(true); }}
                 onFocus={() => setShowSuggestions(true)}
                 placeholder="Type your city or district..."
                 className="w-full bg-[#F6F4EC] border border-transparent rounded-xl pl-11 pr-4 py-3 text-sm text-[#22301A] placeholder:text-[#A8A391] focus:outline-none focus:border-[#5B7A3A] focus:bg-white transition"
@@ -192,8 +196,7 @@ function CropRecommendation() {
                 <div className="absolute z-10 w-full bg-white rounded-xl mt-1.5 shadow-lg border border-[#F0EEE4] max-h-48 overflow-y-auto">
                   {suggestions.map((s, i) => (
                     <button
-                      type="button"
-                      key={i}
+                      type="button" key={i}
                       onClick={() => selectSuggestion(s)}
                       className="w-full text-left px-4 py-2.5 text-sm hover:bg-[#F6F4EC] first:rounded-t-xl last:rounded-b-xl transition"
                     >
@@ -205,9 +208,7 @@ function CropRecommendation() {
               )}
             </div>
             <button
-              type="button"
-              onClick={useMyLocation}
-              disabled={resolving}
+              type="button" onClick={useMyLocation} disabled={resolving}
               className="flex items-center justify-center gap-2 bg-[#22301A] text-white text-sm font-medium px-5 py-3 rounded-xl hover:bg-[#334423] transition disabled:opacity-50 whitespace-nowrap shadow-sm"
             >
               <Navigation size={15} strokeWidth={2} />
@@ -218,23 +219,18 @@ function CropRecommendation() {
           {locError && <p className="text-red-500 text-xs mt-2.5">{locError}</p>}
 
           {locationInfo && (
-            <div className="mt-3 flex items-start gap-1.5 text-xs text-[#7A8A6A]">
-              <MapPin size={13} className="mt-0.5 shrink-0 text-[#5B7A3A]" />
-              <p>
-                <strong className="text-[#22301A]">{locationInfo.place}</strong> ({locationInfo.district})
-                {locationInfo.zone ? (
-                  <>
-                    {' '}· Zone: <strong className="text-[#22301A]">{locationInfo.zone.label}</strong>{' '}
-                    <span className={locationInfo.zone.confidence === 'high' ? 'text-[#5B7A3A]' : 'text-[#C9A15A]'}>
-                      ({locationInfo.zone.confidence === 'high' ? 'verified region' : 'estimated region'})
-                    </span>{' '}
-                    <span className="text-[#B0AA98]">— locked</span>
-                  </>
-                ) : (
-                  <span className="text-amber-600"> · No zone match — enter soil manually below</span>
-                )}
-              </p>
-            </div>
+            <p className="mt-2.5 text-xs text-[#7A8A6A]">
+              📍 <strong className="text-[#22301A]">{locationInfo.place}</strong> ({locationInfo.district})
+              {locationInfo.zone ? (
+                <>
+                  {' '}· Zone: <strong className="text-[#22301A]">{locationInfo.zone.label}</strong>{' '}
+                  {locationInfo.zone.confidence === 'high' ? '🟢' : '🟡'}{' '}
+                  <span className="text-[#B0AA98]">(locked)</span>
+                </>
+              ) : (
+                <span className="text-amber-600"> · No zone match — enter soil manually below</span>
+              )}
+            </p>
           )}
         </div>
 
@@ -258,16 +254,10 @@ function CropRecommendation() {
                   <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center mb-2 shadow-sm">
                     <f.icon size={14} strokeWidth={1.8} className={fieldError ? 'text-red-400' : 'text-[#B08F52]'} />
                   </div>
-                  <label className="text-[10px] text-[#A8895A] block leading-tight mb-0.5">
-                    {f.label}
-                  </label>
+                  <label className="text-[10px] text-[#A8895A] block leading-tight mb-0.5">{f.label}</label>
                   <div className="flex items-baseline gap-1">
                     <input
-                      type="number"
-                      step="any"
-                      name={f.name}
-                      value={form[f.name]}
-                      onChange={handleChange}
+                      type="number" step="any" name={f.name} value={form[f.name]} onChange={handleChange}
                       className="w-full bg-transparent text-[16px] font-medium text-[#3D2E14] focus:outline-none leading-tight min-w-0"
                     />
                     <span className="text-[10px] text-[#C4A876] shrink-0">{f.unit}</span>
@@ -302,15 +292,9 @@ function CropRecommendation() {
                   <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center mb-2 shadow-sm">
                     <Sprout size={14} strokeWidth={1.8} className={fieldError ? 'text-red-400' : 'text-[#5B7A3A]'} />
                   </div>
-                  <label className="text-[10px] text-[#5B7A3A] block leading-tight mb-0.5">
-                    {f.label}
-                  </label>
+                  <label className="text-[10px] text-[#5B7A3A] block leading-tight mb-0.5">{f.label}</label>
                   <input
-                    type="number"
-                    step="any"
-                    name={f.name}
-                    value={form[f.name]}
-                    onChange={handleChange}
+                    type="number" step="any" name={f.name} value={form[f.name]} onChange={handleChange}
                     className="w-full bg-transparent text-[16px] font-medium text-[#22301A] focus:outline-none leading-tight"
                   />
                   {fieldError && <p className="text-[10px] text-red-500 mt-1">{fieldError}</p>}
@@ -350,6 +334,20 @@ function CropRecommendation() {
                       {rankLabels[i]}
                     </div>
                     <div className="text-lg font-semibold capitalize mt-0.5">{s.crop}</div>
+                    {(s.water_need || s.heat_limit) && (
+                      <div className={`text-[11px] mt-1.5 flex items-center gap-3 ${i === 0 ? 'text-[#DCE8C8]' : 'text-[#7A8A6A]'}`}>
+                        {s.water_need && (
+                          <span className="flex items-center gap-1">
+                            <Droplets size={12} /> Water: <span className="capitalize">{s.water_need}</span>
+                          </span>
+                        )}
+                        {s.heat_limit && (
+                          <span className="flex items-center gap-1">
+                            <Thermometer size={12} /> Heat: up to {s.heat_limit}°C
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className={`text-2xl font-serif ${i === 0 ? 'text-white' : 'text-[#5B7A3A]'}`}>
                     {s.confidence}%
@@ -366,6 +364,22 @@ function CropRecommendation() {
                 </li>
               ))}
             </ul>
+
+            <CropCalendar crop={result.suggestions[0].crop} />
+
+            <div className="mt-6 flex justify-start">
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(
+                  `AgriSense AI recommends ${result.suggestions[0].crop.charAt(0).toUpperCase() + result.suggestions[0].crop.slice(1)} (${result.suggestions[0].confidence}%) for my farm${query ? ' in ' + query : ''}.`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 bg-[#25D366] text-white rounded-xl px-4 py-2 hover:bg-[#20bd5a] transition-colors text-sm font-medium"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                Share on WhatsApp
+              </a>
+            </div>
           </div>
         )}
       </div>

@@ -41,6 +41,29 @@ FERTILIZER_INFO = {
     "Sulphur": "Corrects sulphur deficiency and can help lower soil pH slightly.",
 }
 
+# General market reference (approximate estimate, not live pricing)
+FERTILIZER_PRICES = {
+    "Urea": "~₹266 per 45kg bag (subsidized)",
+    "DAP": "~₹1,350 per 50kg bag",
+    "MOP": "~₹1,700 per 50kg bag",
+    "SSP": "~₹450 per 50kg bag",
+    "19:19:19 NPK": "~₹1,500 per 50kg bag",
+    "10:26:26 NPK": "~₹1,470 per 50kg bag",
+    "50:26:26 NPK": "~₹1,600 per 50kg bag",
+    "12:32:16 NPK": "~₹1,450 per 50kg bag",
+    "13:32:26 NPK": "~₹1,500 per 50kg bag",
+    "10:10:10 NPK": "~₹1,200 per 50kg bag",
+    "20:20:20 NPK": "~₹1,500 per 50kg bag",
+    "18:46:00 NPK": "~₹1,350 per 50kg bag",
+    "Magnesium Sulphate": "~₹800 per 50kg bag",
+    "Ferrous Sulphate": "~₹1,200 per 50kg bag",
+    "Ammonium Sulphate": "~₹800 per 50kg bag",
+    "Chilated Micronutrient": "~₹300 - ₹500 per kg",
+    "Hydrated Lime": "~₹300 per 50kg bag",
+    "White Potash": "~₹1,700 per 50kg bag",
+    "Sulphur": "~₹50 - ₹100 per kg",
+}
+
 
 def top_fertilizers(nitrogen, phosphorus, potassium, ph, rainfall, temperature, soil_color, crop, top_n=3):
     if soil_color not in soil_encoder.classes_:
@@ -72,5 +95,6 @@ def top_fertilizers(nitrogen, phosphorus, potassium, ph, rainfall, temperature, 
             "fertilizer": name,
             "confidence": round(float(prob), 3),
             "description": FERTILIZER_INFO.get(name, ""),
+            "price_estimate": FERTILIZER_PRICES.get(name, "Price unavailable")
         })
     return results

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MapPin, Navigation, Thermometer, Droplets, Wind, CloudRain, AlertTriangle, CheckCircle2, Info, Flame, SprayCan, RefreshCw } from 'lucide-react';
+import CropCalendar from '../components/CropCalendar';
 
 const API_BASE = 'http://127.0.0.1:8000';
 
@@ -140,6 +141,7 @@ function WeatherAdvisory() {
             <p className="text-[11px] text-[#A8A391] mt-2">
               Advice below is tailored to this crop's heat and humidity tolerance.
             </p>
+            <CropCalendar crop={selectedCrop === 'general' ? null : selectedCrop} />
           </div>
 
           {/* Current conditions */}

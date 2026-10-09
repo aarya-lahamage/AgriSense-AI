@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import joblib
@@ -7,14 +7,19 @@ import os
 import requests
 from datetime import date, timedelta
 import fertilizer_service
+import shop_service
 import yield_service
-
+import auth_service
+import assistant_service
 from soil_data import AGRO_CLIMATIC_ZONES, DISTRICT_TO_ZONE, MAHARASHTRA_CITIES
+
 app = FastAPI(
     title="AgriSense AI API",
     description="Intelligent Agricultural Decision Support System",
     version="1.0.0"
 )
+
+auth_service.init_db()
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,6 +38,36 @@ MAHARASHTRA_BOUNDS = {
     "lat_min": 15.6, "lat_max": 22.1,
     "lon_min": 72.6, "lon_max": 80.9,
 }
+
+
+# --- Auth helpers (defined early so predict endpoints below can use them) ---
+
+def get_current_user(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    token = authorization.replace("Bearer ", "")
+    try:
+        payload = auth_service.decode_token(token)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    user = auth_service.get_user_by_id(payload["user_id"])
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
+
+def get_current_user_optional(authorization: str = Header(None)):
+    """Like get_current_user, but returns None instead of raising —
+    used so prediction endpoints can save history when logged in,
+    without breaking when tested without a token (e.g. via Swagger)."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    token = authorization.replace("Bearer ", "")
+    try:
+        payload = auth_service.decode_token(token)
+    except ValueError:
+        return None
+    return auth_service.get_user_by_id(payload["user_id"])
 
 
 class CropInput(BaseModel):
@@ -79,6 +114,7 @@ def city_search(query: str):
     matches = [c for c in MAHARASHTRA_CITIES if c["name"].lower().startswith(q)]
     matches.sort(key=lambda x: x["name"])
     return {"results": matches[:10]}
+
 
 def _get_annual_rainfall(lat, lon):
     """Approximate annual rainfall by summing the last 365 days of rain."""
@@ -162,8 +198,9 @@ def resolve_location(lat: float = None, lon: float = None, place: str = None, di
         "weather": {"temperature": temperature, "humidity": humidity, "rainfall": rainfall},
     }
 
+
 @app.post("/predict/crop")
-def predict_crop(data: CropInput):
+def predict_crop(data: CropInput, current_user: dict = Depends(get_current_user_optional)):
     input_array = np.array([[
         data.N, data.P, data.K,
         data.temperature, data.humidity,
@@ -186,10 +223,19 @@ def predict_crop(data: CropInput):
         for name, score in feature_importance[:3]
     ]
 
-    suggestions = [
-        {"crop": crop, "confidence": round(float(prob) * 100, 1)}
-        for crop, prob in top_3
-    ]
+    suggestions = []
+    for crop, prob in top_3:
+        sugg = {"crop": crop, "confidence": round(float(prob) * 100, 1)}
+        crop_key = crop.lower()
+        if crop_key in CROP_PROFILES:
+            sugg["water_need"] = CROP_PROFILES[crop_key]["water_need"]
+            sugg["heat_limit"] = CROP_PROFILES[crop_key]["heat_limit"]
+        suggestions.append(sugg)
+
+    if current_user:
+        top = suggestions[0]
+        summary = f"Recommended {top['crop'].title()} ({top['confidence']}% confidence)"
+        auth_service.save_prediction(current_user["id"], "crop", summary)
 
     return {"suggestions": suggestions, "top_factors": top_reasons}
 
@@ -205,6 +251,20 @@ CROP_PROFILES = {
     "tomato": {"label": "Tomato", "heat_limit": 32, "humid_disease": 75, "water_need": "medium"},
     "general": {"label": "General / Not sure", "heat_limit": 38, "humid_disease": 80, "water_need": "medium"},
 }
+
+from crop_calendar_data import CROP_CALENDAR
+
+@app.get("/crop-calendar/{crop}")
+def get_crop_calendar(crop: str):
+    crop_key = crop.lower()
+    if crop_key in CROP_CALENDAR:
+        return CROP_CALENDAR[crop_key]
+    # Return a generic or empty calendar if crop not found
+    return {
+        "sowing": "Varies by season",
+        "fertilizer": "Follow general recommended practices",
+        "harvest": "Depends on crop duration"
+    }
 
 
 def _spray_score(rainfall, wind, temp):
@@ -411,6 +471,7 @@ def weather_advisory(lat: float, lon: float, crop: str = "general"):
     except Exception:
         raise HTTPException(status_code=503, detail="Weather service unavailable")
 
+
 class FertilizerInput(BaseModel):
     nitrogen: float
     phosphorus: float
@@ -440,13 +501,19 @@ def fertilizer_options():
 
 
 @app.post("/predict/fertilizer")
-def predict_fertilizer_endpoint(data: FertilizerInput):
+def predict_fertilizer_endpoint(data: FertilizerInput, current_user: dict = Depends(get_current_user_optional)):
     try:
         results = fertilizer_service.top_fertilizers(
             data.nitrogen, data.phosphorus, data.potassium,
             data.ph, data.rainfall, data.temperature,
             data.soil_color, data.crop,
         )
+
+        if current_user:
+            top = results[0]
+            summary = f"Recommended {top['fertilizer']} ({round(top['confidence'] * 100, 1)}%) for {data.crop} on {data.soil_color} soil"
+            auth_service.save_prediction(current_user["id"], "fertilizer", summary)
+
         return {
             "suggestions": results,
             "note": "Trained on 4,513 samples from Western Maharashtra districts (Kolhapur, Satara, Sangli, Solapur, Pune) — 92% test accuracy.",
@@ -454,24 +521,26 @@ def predict_fertilizer_endpoint(data: FertilizerInput):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.get("/yield-crops")
 def yield_crops():
     return {"crops": yield_service.CROP_TYPES}
 
 
-@app.get("/yield-seasonal-estimate")
-def yield_seasonal_estimate(lat: float, lon: float, crop: str):
-    if not (MAHARASHTRA_BOUNDS["lat_min"] <= lat <= MAHARASHTRA_BOUNDS["lat_max"] and
-            MAHARASHTRA_BOUNDS["lon_min"] <= lon <= MAHARASHTRA_BOUNDS["lon_max"]):
-        raise HTTPException(status_code=400, detail="This app currently supports Maharashtra locations only")
+@app.get("/nearby-shops")
+def nearby_shops(lat: float, lon: float, radius_km: float = 15.0):
+    """Return up to 8 nearby agrarian/farm shops using OpenStreetMap Overpass API."""
     try:
-        return yield_service.get_seasonal_climate_estimate(lat, lon, crop)
-    except Exception:
-        raise HTTPException(status_code=503, detail="Climate service unavailable")
+        result = shop_service.get_nearby_shops(lat, lon, radius_km)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
 
 
 @app.post("/predict/yield")
-def predict_yield_endpoint(data: YieldInput):
+def predict_yield_endpoint(data: YieldInput, current_user: dict = Depends(get_current_user_optional)):
     try:
         yield_hg, yield_tonnes = yield_service.predict_yield(
             data.crop, data.rainfall, data.avg_temp,
@@ -479,6 +548,11 @@ def predict_yield_endpoint(data: YieldInput):
         profit = yield_service.compute_profit(
             yield_tonnes, data.land_area_acres, data.price_per_quintal, data.cultivation_cost,
         )
+
+        if current_user:
+            summary = f"Predicted {yield_tonnes} tonnes/ha for {data.crop} — est. profit \u20b9{profit['estimated_profit']:,.0f}"
+            auth_service.save_prediction(current_user["id"], "yield", summary)
+
         return {
             "predicted_yield_hg_per_ha": yield_hg,
             "predicted_yield_tonnes_per_ha": yield_tonnes,
@@ -488,3 +562,72 @@ def predict_yield_endpoint(data: YieldInput):
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+class RegisterInput(BaseModel):
+    name: str
+    email: str
+    password: str
+    region: str | None = None
+
+
+class LoginInput(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/register")
+def register(data: RegisterInput):
+    try:
+        user = auth_service.register_user(data.name, data.email, data.password, data.region)
+        token = auth_service.create_token(user["id"], user["email"])
+        return {"token": token, "user": user}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/login")
+def login(data: LoginInput):
+    try:
+        user = auth_service.authenticate_user(data.email, data.password)
+        token = auth_service.create_token(user["id"], user["email"])
+        return {"token": token, "user": user}
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
+
+@app.get("/me")
+def me(current_user: dict = Depends(get_current_user)):
+    return current_user
+
+
+@app.get("/history")
+def history(current_user: dict = Depends(get_current_user)):
+    return {"history": auth_service.get_user_history(current_user["id"])}
+
+
+@app.get("/farm-report")
+def farm_report(current_user: dict = Depends(get_current_user)):
+    """Return user's single most-recent prediction per module (crop, fertilizer, yield)."""
+    conn = auth_service.get_db()
+    report = {}
+    for module in ["crop", "fertilizer", "yield"]:
+        row = conn.execute(
+            "SELECT summary, created_at FROM predictions WHERE user_id = ? AND module = ? ORDER BY id DESC LIMIT 1",
+            (current_user["id"], module)
+        ).fetchone()
+        if row:
+            report[module] = {"summary": row["summary"], "created_at": row["created_at"]}
+        else:
+            report[module] = None
+    conn.close()
+    return report
+
+
+class AssistantInput(BaseModel):
+    message: str
+
+
+@app.post("/assistant/query")
+def assistant_query(data: AssistantInput):
+    return assistant_service.get_response(data.message)
