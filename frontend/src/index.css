@@ -26,3 +26,35 @@ input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
+
+@media print {
+  aside,
+  nav,
+  header,
+  .no-print,
+  .sm\:hidden {
+    display: none !important;
+  }
+
+  .sm\:ml-\[230px\] {
+    margin-left: 0 !important;
+  }
+
+  body, html, #root {
+    background: #ffffff !important;
+    color: #1a1a1a !important;
+  }
+
+  main {
+    padding: 12px !important;
+  }
+
+  .lg\:grid-cols-2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}

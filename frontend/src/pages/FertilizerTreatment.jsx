@@ -1,5 +1,5 @@
   import { useState, useRef, useEffect } from 'react';
-import { FlaskConical, Thermometer, CloudRain, Sprout, MapPin, Navigation } from 'lucide-react';
+import { FlaskConical, Thermometer, CloudRain, Sprout, MapPin, Navigation, Printer } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 
@@ -225,9 +225,11 @@ function FertilizerTreatment() {
       </p>
 
       <div className="bg-white rounded-2xl p-6 shadow-[0_1px_3px_rgba(34,48,26,0.06),0_8px_24px_rgba(34,48,26,0.05)] space-y-7">
-        {/* --- LOCATION --- */}
-        <div>
-          <h3 className="text-[13px] font-semibold text-[#22301A] uppercase tracking-wide mb-3.5">
+        {/* --- FORM INPUTS (Hidden during print) --- */}
+        <div className="space-y-7 no-print">
+          {/* --- LOCATION --- */}
+          <div>
+            <h3 className="text-[13px] font-semibold text-[#22301A] uppercase tracking-wide mb-3.5">
             Your Location
           </h3>
           <div className="flex flex-col sm:flex-row gap-2.5">
@@ -369,6 +371,7 @@ function FertilizerTreatment() {
         </button>
 
         {error && <p className="text-red-500 text-sm">{error}</p>}
+        </div>
 
         {result && (
           <div className="pt-1">
@@ -410,8 +413,17 @@ function FertilizerTreatment() {
             </div>
             {note && <p className="text-[11px] text-[#A8A391] mt-3">{note}</p>}
 
-{/* Find nearby shops button & WhatsApp Share */}
-<div className="mt-4 flex flex-wrap gap-3">
+{/* Find nearby shops button, WhatsApp Share, & Print / Save */}
+<div className="mt-4 flex flex-wrap gap-3 no-print">
+  <button
+    type="button"
+    onClick={() => window.print()}
+    className="inline-flex items-center justify-center gap-2 bg-[#22301A] text-white rounded-xl px-5 py-3 hover:bg-[#334423] transition-colors text-sm font-medium w-full sm:w-auto"
+  >
+    <Printer size={16} />
+    Print / Save
+  </button>
+
   <button
     onClick={fetchNearbyShops}
     disabled={shopsLoading || !coords.lat}
@@ -467,7 +479,7 @@ function FertilizerTreatment() {
 )}
 
 {!shopsLoading && !shopsError && shopsStatus && (
-  <div className="mt-4 flex items-center space-x-4">
+  <div className="mt-4 flex flex-wrap items-center gap-3 no-print">
     <a
       href={`https://www.google.com/maps/search/fertilizer+shop/@${coords.lat},${coords.lon},13z`}
       target="_blank"

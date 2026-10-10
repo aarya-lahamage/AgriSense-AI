@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, CloudRain, Thermometer, Sprout, MapPin, Navigation, Ruler, IndianRupee, Wallet } from 'lucide-react';
+import { TrendingUp, CloudRain, Thermometer, Sprout, MapPin, Navigation, Ruler, IndianRupee, Wallet, Printer } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const API_BASE = 'http://127.0.0.1:8000';
@@ -149,9 +149,11 @@ function YieldProfit() {
       </p>
 
       <div className="bg-white rounded-2xl p-6 shadow-[0_1px_3px_rgba(34,48,26,0.06),0_8px_24px_rgba(34,48,26,0.05)] space-y-7">
-        {/* --- CROP --- */}
-        <div>
-          <h3 className="text-[13px] font-semibold text-[#22301A] uppercase tracking-wide mb-3.5">Crop</h3>
+        {/* --- FORM INPUTS (Hidden during print) --- */}
+        <div className="space-y-7 no-print">
+          {/* --- CROP --- */}
+          <div>
+            <h3 className="text-[13px] font-semibold text-[#22301A] uppercase tracking-wide mb-3.5">Crop</h3>
           <select
             name="crop" value={form.crop} onChange={handleChange}
             className="w-full bg-[#F6F4EC] border border-transparent rounded-xl px-4 py-3 text-sm text-[#22301A] focus:outline-none focus:border-[#5B7A3A] focus:bg-white transition"
@@ -264,6 +266,7 @@ function YieldProfit() {
         </button>
 
         {error && <p className="text-red-500 text-sm">{error}</p>}
+        </div>
 
         {result && (
           <div className="pt-1 space-y-3">
@@ -307,7 +310,15 @@ function YieldProfit() {
 
             <p className="text-[11px] text-[#A8A391] leading-relaxed">{result.disclaimer}</p>
 
-            <div className="mt-4 flex justify-start">
+            <div className="mt-4 flex flex-wrap items-center gap-3 no-print">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="inline-flex items-center gap-2 bg-[#22301A] text-white rounded-xl px-4 py-2 hover:bg-[#334423] transition-colors text-sm font-medium"
+              >
+                <Printer size={16} />
+                Print / Save
+              </button>
               <a
                 href={`https://wa.me/?text=${encodeURIComponent(
                   `AgriSense AI predicts a yield of ${result.predicted_yield_tonnes_per_ha} tonnes/ha with an estimated profit of ₹${result.profit.estimated_profit.toLocaleString('en-IN')} for ${form.crop} on my farm.`
@@ -316,7 +327,7 @@ function YieldProfit() {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 bg-[#25D366] text-white rounded-xl px-4 py-2 hover:bg-[#20bd5a] transition-colors text-sm font-medium"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
                 Share on WhatsApp
               </a>
             </div>

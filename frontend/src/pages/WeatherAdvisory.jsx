@@ -250,6 +250,58 @@ function WeatherAdvisory() {
                 <span className="w-2 h-2 rounded-full bg-[#C75B44]"></span>Avoid (&lt;40)
               </span>
             </div>
+
+            {/* Disease Risk 4-Day Trend Indicator */}
+            <div className="bg-[#FBF3E3] rounded-xl p-3.5 mb-4 border border-[#EFE7D8]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2.5">
+                <div className="flex items-center gap-1.5">
+                  <AlertTriangle size={14} className="text-[#A8895A]" />
+                  <span className="text-[11px] font-semibold text-[#22301A] uppercase tracking-wide">
+                    4-Day Disease Risk Trend ({data.crop})
+                  </span>
+                </div>
+                <span className="text-[11px] text-[#7A6A3A] font-medium">
+                  {(() => {
+                    const risks = data.forecast.map((d) => d.disease_risk);
+                    if (risks[3] === 'high' && risks[0] !== 'high') return '⚠️ Risk rising over 4 days';
+                    if (risks.includes('high')) return '⚠️ High disease pressure forecast';
+                    if (risks.includes('moderate')) return 'Elevated moisture — monitor crops';
+                    return 'Favorable weather — low disease risk';
+                  })()}
+                </span>
+              </div>
+
+              {/* 4-bar / 4-dot indicator */}
+              <div className="grid grid-cols-4 gap-2 text-center">
+                {data.forecast.map((d, i) => {
+                  const risk = d.disease_risk || 'low';
+                  const barColor =
+                    risk === 'high' ? 'bg-[#C75B44]' : risk === 'moderate' ? 'bg-[#C9A15A]' : 'bg-[#5B7A3A]';
+                  const textColor =
+                    risk === 'high' ? 'text-[#C75B44]' : risk === 'moderate' ? 'text-[#C9A15A]' : 'text-[#5B7A3A]';
+                  return (
+                    <div key={d.date} className="bg-white/80 rounded-lg p-2 border border-[#EEEBDD]">
+                      <div className="text-[10px] text-[#8A8A6A] font-medium">{formatDay(d.date, i)}</div>
+                      <div className="w-full bg-[#E5E0D0] h-1.5 rounded-full overflow-hidden my-1.5">
+                        <div
+                          className={`h-full rounded-full ${barColor}`}
+                          style={{
+                            width: risk === 'high' ? '100%' : risk === 'moderate' ? '60%' : '30%',
+                          }}
+                        />
+                      </div>
+                      <div className={`text-[10px] font-semibold capitalize ${textColor}`}>
+                        {risk} Risk
+                      </div>
+                      <div className="text-[9px] text-[#A8A391]">
+                        {d.humidity ? `${Math.round(d.humidity)}% RH` : ''}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="grid grid-cols-4 gap-2.5">
               {data.forecast.map((d, i) => {
                 const isRainy = d.rainfall >= 2;

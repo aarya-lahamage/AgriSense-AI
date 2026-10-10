@@ -253,6 +253,7 @@ CROP_PROFILES = {
 }
 
 from crop_calendar_data import CROP_CALENDAR
+from rotation_data import ROTATION_DATA, DEFAULT_ROTATION
 
 @app.get("/crop-calendar/{crop}")
 def get_crop_calendar(crop: str):
@@ -264,6 +265,17 @@ def get_crop_calendar(crop: str):
         "sowing": "Varies by season",
         "fertilizer": "Follow general recommended practices",
         "harvest": "Depends on crop duration"
+    }
+
+
+@app.get("/rotation-suggestion/{crop}")
+def get_rotation_suggestion(crop: str):
+    """Agronomic crop rotation suggestions for the following season."""
+    crop_key = crop.strip().lower()
+    suggestions = ROTATION_DATA.get(crop_key, DEFAULT_ROTATION)
+    return {
+        "crop": crop,
+        "suggestions": suggestions
     }
 
 
@@ -418,7 +430,7 @@ def weather_advisory(lat: float, lon: float, crop: str = "general"):
             f"https://api.open-meteo.com/v1/forecast"
             f"?latitude={lat}&longitude={lon}"
             f"&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_gusts_10m"
-            f"&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max"
+            f"&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,relative_humidity_2m_mean"
             f"&wind_speed_unit=kmh&forecast_days=4&timezone=auto"
         )
         res = requests.get(url, timeout=8)
@@ -433,17 +445,43 @@ def weather_advisory(lat: float, lon: float, crop: str = "general"):
         gusts = current.get("wind_gusts_10m")
         rainfall_today = daily["precipitation_sum"][0] or 0
 
+        crop_profile = CROP_PROFILES.get(crop, CROP_PROFILES["general"])
+        disease_threshold = crop_profile["humid_disease"]
+
         forecast = []
         for i in range(len(daily["time"])):
             day_rain = daily["precipitation_sum"][i] or 0
             day_wind = daily["wind_speed_10m_max"][i] or 0
             day_temp = daily["temperature_2m_max"][i]
+            day_min_temp = daily["temperature_2m_min"][i]
+            day_mean_temp = (day_temp + day_min_temp) / 2 if (day_temp is not None and day_min_temp is not None) else day_temp
+
+            humidity_series = daily.get("relative_humidity_2m_mean") or []
+            if i < len(humidity_series) and humidity_series[i] is not None:
+                day_humidity = humidity_series[i]
+            else:
+                day_humidity = humidity
+
+            # Disease risk logic matching crop thresholds
+            if day_humidity > disease_threshold and (20 <= day_mean_temp <= 32 or (day_min_temp <= 30 and day_temp >= 20)):
+                day_risk = "high"
+                day_risk_score = 85
+            elif day_humidity > disease_threshold - 10:
+                day_risk = "moderate"
+                day_risk_score = 55
+            else:
+                day_risk = "low"
+                day_risk_score = 25
+
             forecast.append({
                 "date": daily["time"][i],
                 "max_temp": day_temp,
-                "min_temp": daily["temperature_2m_min"][i],
+                "min_temp": day_min_temp,
                 "rainfall": day_rain,
                 "max_wind": day_wind,
+                "humidity": round(float(day_humidity), 1),
+                "disease_risk": day_risk,
+                "disease_score": day_risk_score,
                 "spray_score": _spray_score(day_rain, day_wind, day_temp),
             })
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { MapPin, Thermometer, Droplets, CloudRain, Sprout, Navigation } from 'lucide-react';
+import { MapPin, Thermometer, Droplets, CloudRain, Sprout, Navigation, Printer, Repeat } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import CropCalendar from '../components/CropCalendar';
 
@@ -41,8 +41,18 @@ function CropRecommendation() {
   const debounceRef = useRef(null);
 
   const [result, setResult] = useState(null);
+  const [rotationData, setRotationData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (result?.suggestions?.[0]?.crop) {
+      fetch(`${API_BASE}/rotation-suggestion/${result.suggestions[0].crop}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => setRotationData(data))
+        .catch(() => setRotationData(null));
+    }
+  }, [result]);
 
   useEffect(() => {
     if (query.trim().length < 1) {
@@ -175,9 +185,11 @@ function CropRecommendation() {
       </p>
 
       <div className="bg-white rounded-2xl p-6 shadow-[0_1px_3px_rgba(34,48,26,0.06),0_8px_24px_rgba(34,48,26,0.05)] space-y-7">
-        {/* --- LOCATION --- */}
-        <div>
-          <h3 className="text-[13px] font-semibold text-[#22301A] uppercase tracking-wide mb-3.5">
+        {/* --- FORM INPUTS (Hidden during print) --- */}
+        <div className="space-y-7 no-print">
+          {/* --- LOCATION --- */}
+          <div>
+            <h3 className="text-[13px] font-semibold text-[#22301A] uppercase tracking-wide mb-3.5">
             Your Location
           </h3>
 
@@ -313,6 +325,7 @@ function CropRecommendation() {
         </button>
 
         {error && <p className="text-red-500 text-sm">{error}</p>}
+        </div>
 
         {result && (
           <div className="pt-1">
@@ -367,7 +380,47 @@ function CropRecommendation() {
 
             <CropCalendar crop={result.suggestions[0].crop} />
 
-            <div className="mt-6 flex justify-start">
+            {/* Next Season Multi-Crop Rotation Planner Card */}
+            {rotationData && rotationData.suggestions?.length > 0 && (
+              <div className="mt-5 bg-[#FBF3E3] border border-[#EFE7D8] rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Repeat size={15} className="text-[#5B7A3A]" />
+                  <span className="text-[12px] font-semibold text-[#22301A] uppercase tracking-wide">
+                    Planning Next Season?
+                  </span>
+                </div>
+                <p className="text-xs text-[#7A6A3A] mb-3">
+                  After harvesting <strong className="capitalize text-[#22301A]">{result.suggestions[0].crop}</strong>, try these rotation crops to replenish soil nutrients:
+                </p>
+                <div className="space-y-2">
+                  {rotationData.suggestions.map((item, idx) => (
+                    <div key={idx} className="bg-white/90 rounded-lg p-3 border border-[#EEEBDD]">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-[#22301A]">{item.next_crop}</span>
+                        {item.season && (
+                          <span className="text-[10px] bg-[#E5EFD5] text-[#5B7A3A] px-2 py-0.5 rounded-full font-medium">
+                            {item.season}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-[#5A5A4E] mt-1 leading-relaxed">
+                        {item.reason}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-6 flex flex-wrap items-center gap-3 no-print">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="inline-flex items-center gap-2 bg-[#22301A] text-white rounded-xl px-4 py-2 hover:bg-[#334423] transition-colors text-sm font-medium"
+              >
+                <Printer size={16} />
+                Print / Save
+              </button>
               <a
                 href={`https://wa.me/?text=${encodeURIComponent(
                   `AgriSense AI recommends ${result.suggestions[0].crop.charAt(0).toUpperCase() + result.suggestions[0].crop.slice(1)} (${result.suggestions[0].confidence}%) for my farm${query ? ' in ' + query : ''}.`
@@ -376,7 +429,7 @@ function CropRecommendation() {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 bg-[#25D366] text-white rounded-xl px-4 py-2 hover:bg-[#20bd5a] transition-colors text-sm font-medium"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
                 Share on WhatsApp
               </a>
             </div>
