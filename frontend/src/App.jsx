@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { Home, Sprout, ScanLine, CloudSun, FlaskConical, TrendingUp, MessageCircle, User, ClipboardList, Landmark } from 'lucide-react';
+import { Home, Sprout, ScanLine, CloudSun, FlaskConical, TrendingUp, MessageCircle, User, ClipboardList, Landmark, MapPin } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { LocationProvider, useFarmLocation } from './context/LocationContext';
+import LocationModal from './components/LocationModal';
 
 import Dashboard from './pages/Dashboard';
 import CropRecommendation from './pages/CropRecommendation';
@@ -31,6 +33,7 @@ const navItems = [
 function Sidebar({ open, onClose }) {
   const location = useLocation();
   const { user } = useAuth();
+  const { savedLocation, openLocationModal } = useFarmLocation();
 
   return (
     <>
@@ -70,6 +73,20 @@ function Sidebar({ open, onClose }) {
             );
           })}
         </nav>
+
+        {/* Farm Location chip */}
+        <div className="px-3 pb-2">
+          <button
+            onClick={openLocationModal}
+            className="w-full flex items-center gap-2 text-xs text-[#8A8A6A] hover:text-[#22301A] bg-[#F6F4EC] hover:bg-[#EFE7D8] rounded-xl px-3 py-2.5 transition"
+          >
+            <MapPin size={12} className="text-[#5B7A3A] shrink-0" />
+            <span className="truncate flex-1 text-left">
+              {savedLocation ? savedLocation.name : 'Set farm location'}
+            </span>
+            <span className="text-[#A8A391] shrink-0">change</span>
+          </button>
+        </div>
 
         <Link
           to="/profile"

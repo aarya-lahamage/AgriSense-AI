@@ -567,10 +567,9 @@ def yield_crops():
 
 @app.get("/nearby-shops")
 def nearby_shops(lat: float, lon: float, radius_km: float = 15.0):
-    """Return up to 8 nearby agrarian/farm shops using OpenStreetMap Overpass API."""
+    """Return nearby agrarian/farm shops using OpenStreetMap Overpass API."""
     try:
-        result = shop_service.get_nearby_shops(lat, lon, radius_km)
-        return result
+        return shop_service.find_nearby_shops(lat, lon)
     except Exception as e:
         raise HTTPException(status_code=503, detail=str(e))
 

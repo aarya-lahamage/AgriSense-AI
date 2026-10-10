@@ -446,45 +446,58 @@ function FertilizerTreatment() {
 </div>
 
 {/* Shops results */}
-{shopsLoading && <p className="text-sm text-[#7A8A6A] mt-2">Loading nearby shops...</p>}
-{shopsError && <p className="text-sm text-red-500 mt-2">{shopsError}</p>}
-
-{!shopsLoading && !shopsError && shopsStatus === 'service_error' && (
-  <p className="text-sm text-[#7A8A6A] mt-2">Map data service abhi busy hai, thodi der baad try karo ya neeche Google Maps use karo.</p>
+{shopsLoading && (
+  <div className="bg-[#F6F4EC] rounded-xl p-3.5 mt-3 text-sm text-[#7A8A6A] animate-pulse">
+    Searching agricultural supply shops nearby...
+  </div>
 )}
 
-{!shopsLoading && !shopsError && shopsStatus === 'no_results' && (
-  <p className="text-sm text-[#7A8A6A] mt-2">Is area mein map data mein dukaanein nahi mili.</p>
+{!shopsLoading && shopsStatus === 'service_error' && (
+  <div className="bg-[#FBF3E3] border border-[#EFE7D8] rounded-xl p-3.5 mt-3">
+    <p className="text-sm text-[#7A6A3A]">
+      Map data service abhi busy hai, thodi der baad try karo ya neeche Google Maps use karo.
+    </p>
+  </div>
 )}
 
-{shops.length > 0 && (
+{!shopsLoading && shopsStatus === 'no_results' && (
+  <div className="bg-[#FBF3E3] border border-[#EFE7D8] rounded-xl p-3.5 mt-3">
+    <p className="text-sm text-[#7A6A3A]">
+      Hamare map data mein is area ki dukaanein nahi mili — neeche Google Maps se nazdeeki dukaanein dekh sakte ho.
+    </p>
+  </div>
+)}
+
+{!shopsLoading && shops.length > 0 && (
   <div className="space-y-3 mt-3">
     {shops.map((shop, i) => (
-      <div key={i} className="bg-white rounded-2xl p-4 shadow-[0_1px_3px_rgba(34,48,26,0.06),0_8px_24px_rgba(34,48,26,0.05)]">
+      <div key={i} className="bg-white rounded-2xl p-4 shadow-[0_1px_3px_rgba(34,48,26,0.06),0_8px_24px_rgba(34,48,26,0.05)] border border-[#EEEBDD]">
         <h4 className="font-medium text-[#22301A]">{shop.name}</h4>
         <p className="text-sm text-[#7A8A6A]">
-          {shop.distance_km.toFixed(2)} km{shop.address ? ` — ${shop.address}` : ''}
+          {shop.distance_km.toFixed(1)} km{shop.address ? ` — ${shop.address}` : ''}
+          {shop.phone ? ` · 📞 ${shop.phone}` : ''}
         </p>
         <a
           href={`https://www.google.com/maps/dir/?api=1&destination=${shop.lat},${shop.lon}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-block mt-2 text-[#5B7A3A] underline text-sm"
+          className="inline-block mt-2 text-[#5B7A3A] underline text-sm font-medium"
         >
-          Directions
+          Directions →
         </a>
       </div>
     ))}
   </div>
 )}
 
-{!shopsLoading && !shopsError && shopsStatus && (
+{/* Permanent Google Maps search buttons */}
+{!shopsLoading && (shopsStatus || shops.length > 0) && coords.lat && (
   <div className="mt-4 flex flex-wrap items-center gap-3 no-print">
     <a
       href={`https://www.google.com/maps/search/fertilizer+shop/@${coords.lat},${coords.lon},13z`}
       target="_blank"
       rel="noopener noreferrer"
-      className="bg-[#5B7A3A] text-white rounded-xl px-4 py-2 hover:bg-[#4C6B4C] text-sm"
+      className="bg-[#5B7A3A] text-white rounded-xl px-4 py-2.5 hover:bg-[#4C6B4C] text-sm font-medium transition"
     >
       Google Maps pe fertilizer shops dhoondo
     </a>
@@ -492,7 +505,7 @@ function FertilizerTreatment() {
       href={`https://www.google.com/maps/search/krushi+kendra/@${coords.lat},${coords.lon},13z`}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-[#5B7A3A] underline text-sm"
+      className="bg-[#F6F4EC] text-[#22301A] border border-[#EEEBDD] rounded-xl px-4 py-2.5 hover:bg-[#EFE7D8] text-sm font-medium transition"
     >
       Krushi Kendra dhoondo
     </a>
