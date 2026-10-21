@@ -1,6 +1,8 @@
-  import { useState, useRef, useEffect } from 'react';
+  import LoadingSpinner from '../components/LoadingSpinner';
+import Toast from '../components/Toast';
 import { FlaskConical, Thermometer, CloudRain, Sprout, MapPin, Navigation, Printer } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useFarmLocation } from '../context/LocationContext';
 
 
 
@@ -38,74 +40,57 @@ function FertilizerTreatment() {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [resolving, setResolving] = useState(false);
-  const [locationInfo, setLocationInfo] = useState(null);
-  const [locError, setLocError] = useState('');
   const [shops, setShops] = useState([]);
   const [shopsStatus, setShopsStatus] = useState(null);
   const [shopsLoading, setShopsLoading] = useState(false);
   const [shopsError, setShopsError] = useState('');
-  const [coords, setCoords] = useState({ lat: null, lon: null });
   const debounceRef = useRef(null);
 
   const [result, setResult] = useState(null);
 
   // Resolve location and store coordinates
-  const resolveLocation = async (lat, lon, place, district) => {
-    setResolving(true);
-    setLocError('');
-    try {
-      let url = `${API_BASE}/resolve-location?lat=${lat}&lon=${lon}`;
-      if (place) url += `&place=${encodeURIComponent(place)}`;
-      if (district) url += `&district=${encodeURIComponent(district)}`;
-      const res = await fetch(url);
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || 'Could not resolve location');
-      }
-      const data = await res.json();
-      setLocationInfo(data);
-      setCoords({ lat, lon });
+// resolveLocation is now handled via useFarmLocation context
+
+// Use location from shared context
+  const { savedLocation, saveLocation, loadingLocation, error: locError, refreshLocation } = useFarmLocation();
+
+  // Update form fields when savedLocation changes
+  useEffect(() => {
+    if (savedLocation) {
       setForm((prev) => ({
         ...prev,
-        temperature: data.weather.temperature,
-        rainfall: data.weather.rainfall,
-        ...(data.zone ? { nitrogen: data.zone.N, phosphorus: data.zone.P, potassium: data.zone.K, ph: data.zone.ph } : {}),
+        temperature: savedLocation.weather?.temperature ?? '',
+        rainfall: savedLocation.weather?.rainfall ?? '',
+        ...(savedLocation.zone ? {
+          nitrogen: savedLocation.zone.N,
+          phosphorus: savedLocation.zone.P,
+          potassium: savedLocation.zone.K,
+          ph: savedLocation.zone.ph,
+        } : {}),
       }));
-    } catch (err) {
-      setLocError(err.message);
-      setLocationInfo(null);
-      setCoords({ lat: null, lon: null });
-    } finally {
-      setResolving(false);
     }
-  };
+  }, [savedLocation]);
 
   const useMyLocation = () => {
-    if (!navigator.geolocation) {
-      setLocError('Location is not supported by this browser.');
-      return;
-    }
-    setResolving(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        resolveLocation(pos.coords.latitude, pos.coords.longitude);
-        setQuery('');
-      },
-      () => {
-        setResolving(false);
-        setLocError('Location access denied. Try typing your city instead.');
-      }
-    );
+    // Centralized location refresh from context
+    refreshLocation();
   };
 
+  const selectSuggestion = (s) => {
+    setQuery(s.name);
+    setShowSuggestions(false);
+    saveLocation({ lat: s.lat, lon: s.lon, name: s.name, district: s.district });
+  };
+
+  // Fetch nearby shops using saved location coordinates
   const fetchNearbyShops = async () => {
-    if (!coords.lat || !coords.lon) return;
+    const { lat, lon } = savedLocation || {};
+    if (!lat || !lon) return;
     setShopsLoading(true);
     setShopsError('');
     setShopsStatus(null);
     try {
-      const res = await fetch(`${API_BASE}/nearby-shops?lat=${coords.lat}&lon=${coords.lon}`);
+      const res = await fetch(`${API_BASE}/nearby-shops?lat=${lat}&lon=${lon}`);
       const data = await res.json();
       if (!res.ok) {
         const msg = data.detail || data.message || 'Failed to get shops';
@@ -122,6 +107,15 @@ function FertilizerTreatment() {
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState(null); // {msg, type}
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+  };
+
+  const handleToastClose = () => setToast(null);
 
   useEffect(() => {
     fetch(`${API_BASE}/fertilizer-options`)
@@ -149,11 +143,7 @@ function FertilizerTreatment() {
 
 
 
-  const selectSuggestion = (s) => {
-    setQuery(s.name);
-    setShowSuggestions(false);
-    resolveLocation(s.lat, s.lon, s.name, s.district);
-  };
+// Duplicate selectSuggestion removed - using the earlier definition that saves location
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -216,7 +206,7 @@ function FertilizerTreatment() {
   const rankLabels = ['Best Match', '2nd Option', '3rd Option'];
 
   return (
-    <div className="w-full max-w-2xl mx-auto">
+    <div className={`w-full max-w-2xl mx-auto ${mounted ? 'opacity-100 transition-opacity duration-500' : 'opacity-0'}`}>
       <h2 className="font-serif text-[26px] font-medium text-[#22301A] mb-1">
         Fertilizer Recommendation
       </h2>
@@ -259,17 +249,17 @@ function FertilizerTreatment() {
               )}
             </div>
             <button
-              type="button" onClick={useMyLocation} disabled={resolving}
+              type="button" onClick={useMyLocation} disabled={loadingLocation}
               className="flex items-center justify-center gap-2 bg-[#22301A] text-white text-sm font-medium px-5 py-3 rounded-xl hover:bg-[#334423] transition disabled:opacity-50 whitespace-nowrap shadow-sm"
             >
               <Navigation size={15} strokeWidth={2} />
-              {resolving ? 'Locating...' : 'Use My Location'}
+              {loadingLocation ? 'Locating...' : 'Use My Location'}
             </button>
           </div>
           {locError && <p className="text-red-500 text-xs mt-2.5">{locError}</p>}
-          {locationInfo && (
+          {savedLocation && (
             <p className="mt-2.5 text-xs text-[#7A8A6A]">
-              📍 <strong className="text-[#22301A]">{locationInfo.place}</strong> — climate and soil nutrients auto-filled below.
+              📍 <strong className="text-[#22301A]">{savedLocation.name}</strong> — climate and soil nutrients auto-filled below.
             </p>
           )}
         </div>

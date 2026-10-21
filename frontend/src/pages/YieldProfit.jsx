@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, CloudRain, Thermometer, Sprout, MapPin, Navigation, Ruler, IndianRupee, Wallet, Printer } from 'lucide-react';
+import { TrendingUp, CloudRain, Thermometer, Sprout, Navigation, Ruler, IndianRupee, Wallet, Printer } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const API_BASE = 'http://127.0.0.1:8000';

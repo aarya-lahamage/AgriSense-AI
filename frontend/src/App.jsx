@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { Home, Sprout, ScanLine, CloudSun, FlaskConical, TrendingUp, MessageCircle, User, ClipboardList, Landmark, MapPin } from 'lucide-react';
+import { Home, Sprout, ScanLine, CloudSun, FlaskConical, TrendingUp, MessageCircle, User, ClipboardList, Landmark, MapPin, IndianRupee, FileSearch, Calculator, Store } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LocationProvider, useFarmLocation } from './context/LocationContext';
 import LocationModal from './components/LocationModal';
@@ -16,14 +16,22 @@ import Profile from './pages/Profile';
 import Login from './pages/Login';
 import FarmReport from './pages/FarmReport';
 import GovernmentSchemes from './pages/GovernmentSchemes';
+import Expenses from './pages/Expenses';
+import SoilCardOCR from './pages/SoilCardOCR';
+import FarmBudgetPlanner from './pages/FarmBudgetPlanner';
+import MandiRates from './pages/MandiRates';
 
 const navItems = [
   { icon: Home, label: 'Home', path: '/' },
   { icon: Sprout, label: 'Crop Advisor', path: '/crop-recommendation' },
   { icon: ScanLine, label: 'Disease Scan', path: '/disease-detection' },
   { icon: CloudSun, label: 'Weather', path: '/weather-advisory' },
+  { icon: Store, label: 'Mandi Rates', path: '/mandi-rates' },
   { icon: FlaskConical, label: 'Fertilizer', path: '/fertilizer-treatment' },
   { icon: TrendingUp, label: 'Yield & Profit', path: '/yield-profit' },
+  { icon: IndianRupee, label: 'Expenses', path: '/expenses' },
+  { icon: FileSearch, label: 'Soil Card OCR', path: '/soil-card-ocr' },
+  { icon: Calculator, label: 'Farm Budget', path: '/farm-budget' },
   { icon: ClipboardList, label: 'Farm Report', path: '/farm-report' },
   { icon: Landmark, label: 'Gov. Schemes', path: '/government-schemes' },
   { icon: MessageCircle, label: 'AI Assistant', path: '/ai-assistant' },
@@ -136,6 +144,10 @@ function ProtectedLayout() {
             <Route path="/ai-assistant" element={<AIAssistant />} />
             <Route path="/farm-report" element={<FarmReport />} />
             <Route path="/government-schemes" element={<GovernmentSchemes />} />
+            <Route path="/mandi-rates" element={<MandiRates />} />
+            <Route path="/expenses" element={<Expenses />} />
+            <Route path="/soil-card-ocr" element={<SoilCardOCR />} />
+            <Route path="/farm-budget" element={<FarmBudgetPlanner />} />
             <Route path="/profile" element={<Profile />} />
           </Routes>
         </main>
@@ -147,12 +159,16 @@ function ProtectedLayout() {
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <LocationProvider>
+        <BrowserRouter>
+        <LocationModal />
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/*" element={<ProtectedLayout />} />
         </Routes>
       </BrowserRouter>
+
+      </LocationProvider>
     </AuthProvider>
   );
 }

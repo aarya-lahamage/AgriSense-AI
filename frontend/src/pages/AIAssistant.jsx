@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Send, Bot, User as UserIcon, ArrowRight } from 'lucide-react';
+import { Send, Bot, User as UserIcon, ArrowRight, Volume2, VolumeX } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { speakText, stopSpeech, isSpeaking } from '../utils/speech';
 
 const API_BASE = 'http://127.0.0.1:8000';
 
@@ -20,6 +21,7 @@ function AIAssistant() {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [speakingIdx, setSpeakingIdx] = useState(null);
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -85,13 +87,35 @@ function AIAssistant() {
             </div>
             <div className={`max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'} flex flex-col gap-2`}>
               <div
-                className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                className={`group relative rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                   msg.role === 'user'
                     ? 'bg-[#22301A] text-white rounded-tr-sm'
                     : 'bg-[#F6F4EC] text-[#22301A] rounded-tl-sm'
                 }`}
               >
-                {msg.text}
+                <span>{msg.text}</span>
+                {msg.role === 'assistant' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (speakingIdx === i && isSpeaking()) {
+                        stopSpeech();
+                        setSpeakingIdx(null);
+                      } else {
+                        setSpeakingIdx(i);
+                        speakText(msg.text, () => setSpeakingIdx(null));
+                      }
+                    }}
+                    className="ml-2 inline-flex items-center text-[#5B7A3A] hover:text-[#22301A] align-middle opacity-80 hover:opacity-100 transition"
+                    title="Audio Suniye"
+                  >
+                    {speakingIdx === i ? (
+                      <VolumeX size={14} className="text-amber-700 animate-pulse" />
+                    ) : (
+                      <Volume2 size={14} />
+                    )}
+                  </button>
+                )}
               </div>
               {msg.suggestions && msg.suggestions.length > 0 && (
                 <div className="flex flex-wrap gap-2">

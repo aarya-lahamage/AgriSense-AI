@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { useState, useRef, useEffect } from 'react';
 import { MapPin, Navigation, X, Check, Search, AlertCircle } from 'lucide-react';
 import { useFarmLocation } from '../context/LocationContext';
@@ -75,10 +76,13 @@ export default function LocationModal() {
           }
           const data = await res.json();
           saveLocation({
-            name: data.location?.place || 'Current Farm',
-            district: data.location?.district || '',
+            name: data.place || data.district || 'Current Farm',
+            district: data.district || '',
             lat,
             lon,
+            zone: data.zone,
+            weather: data.weather,
+            zone_id: data.zone_id,
           });
           closeLocationModal();
         } catch (err) {

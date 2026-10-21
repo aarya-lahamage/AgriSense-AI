@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { MapPin, Thermometer, Droplets, CloudRain, Sprout, Navigation, Printer, Repeat } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { MapPin, Thermometer, Droplets, CloudRain, Sprout, Navigation, Printer, Repeat, Volume2, VolumeX } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import CropCalendar from '../components/CropCalendar';
+import { speakText, stopSpeech, isSpeaking } from '../utils/speech';
 
 const API_BASE = 'http://127.0.0.1:8000';
 
@@ -27,10 +29,27 @@ function getFieldError(name, value) {
 
 function CropRecommendation() {
   const { token } = useAuth();
+  const location = useLocation();
 
   const [form, setForm] = useState({
     N: '', P: '', K: '', temperature: '', humidity: '', ph: '', rainfall: '',
   });
+
+  const [importedFromOcr, setImportedFromOcr] = useState(false);
+  const [isSpeakingResult, setIsSpeakingResult] = useState(false);
+
+  useEffect(() => {
+    if (location.state && (location.state.N !== undefined || location.state.ph !== undefined)) {
+      setForm((prev) => ({
+        ...prev,
+        ...(location.state.N !== null && location.state.N !== undefined ? { N: location.state.N } : {}),
+        ...(location.state.P !== null && location.state.P !== undefined ? { P: location.state.P } : {}),
+        ...(location.state.K !== null && location.state.K !== undefined ? { K: location.state.K } : {}),
+        ...(location.state.ph !== null && location.state.ph !== undefined ? { ph: location.state.ph } : {}),
+      }));
+      setImportedFromOcr(true);
+    }
+  }, [location.state]);
 
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
@@ -185,6 +204,16 @@ function CropRecommendation() {
       </p>
 
       <div className="bg-white rounded-2xl p-6 shadow-[0_1px_3px_rgba(34,48,26,0.06),0_8px_24px_rgba(34,48,26,0.05)] space-y-7">
+        {importedFromOcr && (
+          <div className="bg-[#E5EFD5] border border-[#C8DEAB] rounded-xl p-3 flex items-center justify-between text-xs text-[#35521C]">
+            <span className="flex items-center gap-2">
+              <span className="text-base">✨</span>
+              <span><strong>Soil Card values imported!</strong> N, P, K &amp; pH have been automatically pre-filled.</span>
+            </span>
+            <button onClick={() => setImportedFromOcr(false)} className="text-[#5B7A3A] font-bold hover:underline">Dismiss</button>
+          </div>
+        )}
+
         {/* --- FORM INPUTS (Hidden during print) --- */}
         <div className="space-y-7 no-print">
           {/* --- LOCATION --- */}
@@ -413,6 +442,31 @@ function CropRecommendation() {
             )}
 
             <div className="mt-6 flex flex-wrap items-center gap-3 no-print">
+              <button
+                type="button"
+                onClick={() => {
+                  if (isSpeakingResult && isSpeaking()) {
+                    stopSpeech();
+                    setIsSpeakingResult(false);
+                    return;
+                  }
+                  const topCrop = result.suggestions[0];
+                  let speech = `AgriSense AI recommends ${topCrop.crop} with ${topCrop.confidence} percent confidence. `;
+                  if (rotationData?.suggestions?.length) {
+                    speech += `For next season rotation, consider ${rotationData.suggestions[0].next_crop}. ${rotationData.suggestions[0].reason}`;
+                  }
+                  setIsSpeakingResult(true);
+                  speakText(speech, () => setIsSpeakingResult(false));
+                }}
+                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 transition-colors text-sm font-medium ${
+                  isSpeakingResult
+                    ? 'bg-amber-100 text-amber-900 border border-amber-300 animate-pulse'
+                    : 'bg-[#F6F4EC] text-[#22301A] border border-[#E5E0D0] hover:bg-[#EFE7D8]'
+                }`}
+              >
+                {isSpeakingResult ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                <span>{isSpeakingResult ? 'Stop Audio' : 'Suniye 🔊'}</span>
+              </button>
               <button
                 type="button"
                 onClick={() => window.print()}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { MapPin, Navigation, Thermometer, Droplets, Wind, CloudRain, AlertTriangle, CheckCircle2, Info, Flame, SprayCan, RefreshCw } from 'lucide-react';
+import { MapPin, Navigation, Thermometer, Droplets, Wind, CloudRain, AlertTriangle, CheckCircle2, Info, Flame, SprayCan, RefreshCw, Volume2, VolumeX } from 'lucide-react';
 import CropCalendar from '../components/CropCalendar';
+import { speakText, stopSpeech, isSpeaking } from '../utils/speech';
 
 const API_BASE = 'http://127.0.0.1:8000';
 
@@ -18,6 +19,7 @@ function WeatherAdvisory() {
   const [selectedCrop, setSelectedCrop] = useState('general');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [speaking, setSpeaking] = useState(false);
 
   useEffect(() => {
     fetch(`${API_BASE}/crops`)
@@ -91,6 +93,21 @@ function WeatherAdvisory() {
     score >= 70 ? 'text-[#5B7A3A]' : score >= 40 ? 'text-[#C9A15A]' : 'text-[#C75B44]';
   const scoreBar = (score) =>
     score >= 70 ? 'bg-[#5B7A3A]' : score >= 40 ? 'bg-[#C9A15A]' : 'bg-[#C75B44]';
+
+  const handleSpeakAdvisories = () => {
+    if (speaking && isSpeaking()) {
+      stopSpeech();
+      setSpeaking(false);
+      return;
+    }
+    if (!data?.advisories?.length) return;
+    const topThree = data.advisories
+      .slice(0, 3)
+      .map((a) => `${a.title}. ${a.message}`)
+      .join(' ');
+    setSpeaking(true);
+    speakText(`Weather advisory for ${data.crop}. ${topThree}`, () => setSpeaking(false));
+  };
 
   return (
     <div className="w-full max-w-2xl mx-auto">
@@ -200,9 +217,24 @@ function WeatherAdvisory() {
 
           {/* Advisories */}
           <div className="bg-white rounded-2xl p-6 shadow-[0_1px_3px_rgba(34,48,26,0.06),0_8px_24px_rgba(34,48,26,0.05)]">
-            <h3 className="text-[13px] font-semibold text-[#22301A] uppercase tracking-wide mb-4">
-              What To Do — {data.crop}
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-[13px] font-semibold text-[#22301A] uppercase tracking-wide">
+                What To Do — {data.crop}
+              </h3>
+              <button
+                type="button"
+                onClick={handleSpeakAdvisories}
+                className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl transition ${
+                  speaking
+                    ? 'bg-amber-100 text-amber-900 border border-amber-300 animate-pulse'
+                    : 'bg-[#F6F4EC] text-[#5B7A3A] hover:bg-[#DCE8C8]'
+                }`}
+                title="Audio: Advisory Suniye"
+              >
+                {speaking ? <VolumeX size={13} /> : <Volume2 size={13} />}
+                <span>{speaking ? 'Rukiye' : 'Advisory Suniye 🔊'}</span>
+              </button>
+            </div>
             <div className="space-y-3">
               {data.advisories.map((a, i) => {
                 const style = levelStyles[a.level];

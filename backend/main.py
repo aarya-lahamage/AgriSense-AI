@@ -1,6 +1,7 @@
-from fastapi import Depends, FastAPI, HTTPException, Header
+from fastapi import Depends, FastAPI, HTTPException, Header, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
 import joblib
 import numpy as np
 import os
@@ -11,6 +12,8 @@ import shop_service
 import yield_service
 import auth_service
 import assistant_service
+import mandi_service
+import disease_service
 from soil_data import AGRO_CLIMATIC_ZONES, DISTRICT_TO_ZONE, MAHARASHTRA_CITIES
 
 app = FastAPI(
@@ -270,12 +273,20 @@ def get_crop_calendar(crop: str):
 
 @app.get("/rotation-suggestion/{crop}")
 def get_rotation_suggestion(crop: str):
-    """Agronomic crop rotation suggestions for the following season."""
+    """Agronomic crop rotation suggestions for the following season.
+    Returns suggestions for known crops; otherwise returns empty list with a message.
+    """
     crop_key = crop.strip().lower()
-    suggestions = ROTATION_DATA.get(crop_key, DEFAULT_ROTATION)
+    suggestions = ROTATION_DATA.get(crop_key)
+    if suggestions is None:
+        return {
+            "crop": crop,
+            "suggestions": [],
+            "message": f"No rotation data found for '{crop}'. Provide a valid crop name."
+        }
     return {
         "crop": crop,
-        "suggestions": suggestions
+        "suggestions": suggestions,
     }
 
 
@@ -668,3 +679,121 @@ class AssistantInput(BaseModel):
 @app.post("/assistant/query")
 def assistant_query(data: AssistantInput):
     return assistant_service.get_response(data.message)
+
+
+# ── PUT /me — update profile ────────────────────────────────────
+
+class UpdateProfileInput(BaseModel):
+    name: Optional[str] = None
+    region: Optional[str] = None
+
+
+@app.put("/me")
+def update_me(data: UpdateProfileInput, current_user: dict = Depends(get_current_user)):
+    updated = auth_service.update_user(current_user["id"], name=data.name, region=data.region)
+    return updated
+
+
+# ── DELETE /history — wipe all predictions history ──────────────
+
+@app.delete("/history")
+def delete_history(current_user: dict = Depends(get_current_user)):
+    auth_service.delete_all_history(current_user["id"])
+    return {"message": "All prediction history deleted"}
+
+
+# ── Expenses endpoints ──────────────────────────────────────────
+
+class ExpenseInput(BaseModel):
+    category: str
+    amount: float
+    note: Optional[str] = None
+    date: str  # YYYY-MM-DD
+
+
+@app.get("/expenses")
+def list_expenses(current_user: dict = Depends(get_current_user)):
+    expenses, total = auth_service.get_expenses(current_user["id"])
+    return {"expenses": expenses, "total": total}
+
+
+@app.post("/expenses")
+def add_expense(data: ExpenseInput, current_user: dict = Depends(get_current_user)):
+    if data.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than 0")
+    auth_service.add_expense(
+        current_user["id"], data.category, data.amount, data.note, data.date,
+    )
+    return {"message": "Expense added successfully"}
+
+
+@app.delete("/expenses/{expense_id}")
+def delete_expense(expense_id: int, current_user: dict = Depends(get_current_user)):
+    deleted = auth_service.delete_expense(current_user["id"], expense_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Expense not found or not yours")
+    return {"message": "Expense deleted"}
+
+
+# ── POST /ocr/soil-card — OCR soil health card ──────────────────
+
+try:
+    import ocr_service
+    _OCR_AVAILABLE = True
+except ImportError:
+    _OCR_AVAILABLE = False
+
+
+@app.post("/ocr/soil-card")
+async def ocr_soil_card(file: UploadFile = File(...)):
+    if not _OCR_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="OCR service not available. Install pytesseract and Pillow: pip install pytesseract Pillow",
+        )
+    try:
+        result = ocr_service.ocr_soil_card(file.file)
+        return result
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+# ── GET /mandi-prices — APMC market rates ───────────────────────
+
+@app.get("/mandi-prices")
+def get_mandi_prices(crop: Optional[str] = None, district: Optional[str] = None):
+    """APMC market prices, MSP benchmarks, and top markets across Maharashtra."""
+    return mandi_service.get_all_mandi_prices(crop=crop, district=district)
+
+
+@app.get("/mandi-prices/{crop}")
+def get_crop_mandi_price(crop: str):
+    """Mandi price details and selling recommendation for a single crop."""
+    data = mandi_service.get_single_crop_mandi(crop)
+    if not data:
+        raise HTTPException(status_code=404, detail="Crop not found in APMC database")
+    return data
+
+
+# ── POST /predict/disease — Leaf Disease Detection ─────────────
+
+@app.post("/predict/disease")
+async def predict_disease_endpoint(
+    file: UploadFile = File(...),
+    crop: Optional[str] = "general",
+    current_user: dict = Depends(get_current_user_optional)
+):
+    """Diagnose crop leaf diseases from image with chemical & organic remedies."""
+    try:
+        content = await file.read()
+        res = disease_service.analyze_leaf_image(content, crop=crop)
+        if current_user and not res.get("is_healthy"):
+            summary = f"Detected {res['disease_name']} on {res['crop']} ({res['severity']})"
+            auth_service.save_prediction(current_user["id"], "disease", summary)
+        return res
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Diagnostic processing failed: {str(e)}")
+
+

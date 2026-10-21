@@ -43,6 +43,18 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS expenses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            category TEXT NOT NULL,
+            amount REAL NOT NULL,
+            note TEXT,
+            date TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -133,3 +145,71 @@ def get_user_history(user_id, limit=20):
     ).fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+
+def update_user(user_id, name=None, region=None):
+    conn = get_db()
+    fields = []
+    values = []
+    if name is not None:
+        fields.append("name = ?")
+        values.append(name)
+    if region is not None:
+        fields.append("region = ?")
+        values.append(region)
+    if not fields:
+        conn.close()
+        return get_user_by_id(user_id)
+    values.append(user_id)
+    conn.execute(f"UPDATE users SET {', '.join(fields)} WHERE id = ?", values)
+    conn.commit()
+    conn.close()
+    return get_user_by_id(user_id)
+
+
+def delete_all_history(user_id):
+    conn = get_db()
+    conn.execute("DELETE FROM predictions WHERE user_id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+
+
+# ── Expenses CRUD ─────────────────────────────────────────────
+
+def add_expense(user_id, category, amount, note, date_str):
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO expenses (user_id, category, amount, note, date, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (user_id, category, amount, note, date_str, datetime.now(timezone.utc).isoformat()),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_expenses(user_id):
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT id, category, amount, note, date, created_at FROM expenses WHERE user_id = ? ORDER BY id DESC",
+        (user_id,),
+    ).fetchall()
+    total_row = conn.execute(
+        "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE user_id = ?",
+        (user_id,),
+    ).fetchone()
+    conn.close()
+    return [dict(r) for r in rows], total_row["total"]
+
+
+def delete_expense(user_id, expense_id):
+    """Delete an expense only if it belongs to the given user. Returns True if deleted."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT id FROM expenses WHERE id = ? AND user_id = ?", (expense_id, user_id)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return False
+    conn.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
+    conn.commit()
+    conn.close()
+    return True

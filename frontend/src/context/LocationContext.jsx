@@ -1,38 +1,65 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState } from 'react';
 
 const LocationContext = createContext(null);
 const STORAGE_KEY = 'agrisense_farm_location';
+const API_BASE = 'http://127.0.0.1:8000';
+
+// Default Maharashtra central farm location (used if none saved yet)
+const DEFAULT_FARM_LOCATION = {
+  name: 'Pune Farm',
+  district: 'Pune',
+  lat: 18.5204,
+  lon: 73.8567,
+  zone_id: 'scarcity_zone',
+  zone: {
+    label: 'Scarcity Zone / Western Ghats Transition',
+    confidence: 'high',
+    N: 75,
+    P: 40,
+    K: 45,
+    ph: 7.2,
+    soil_type: 'Medium Black Soil',
+  },
+  weather: {
+    temperature: 28.0,
+    humidity: 58.0,
+    rainfall: 650.0,
+  },
+};
 
 export function LocationProvider({ children }) {
   const [savedLocation, setSavedLocation] = useState(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      return stored ? JSON.parse(stored) : null;
+      return stored ? JSON.parse(stored) : DEFAULT_FARM_LOCATION;
     } catch {
-      return null;
+      return DEFAULT_FARM_LOCATION;
     }
   });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const saveLocation = (loc) => {
-    if (!loc) {
-      clearLocation();
+  // Auto-resolve full weather & zone details whenever a location is chosen
+// Refresh location on user request
+  const refreshLocation = async () => {
+    if (!navigator.geolocation) {
+      console.warn('Geolocation not supported');
       return;
     }
-    const cleanLoc = {
-      name: loc.name || loc.place || 'Selected Farm',
-      district: loc.district || '',
-      lat: parseFloat(loc.lat),
-      lon: parseFloat(loc.lon),
-    };
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanLoc));
-    } catch (e) {
-      console.error('Failed to save farm location to localStorage', e);
-    }
-    setSavedLocation(cleanLoc);
+    setLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        saveLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+      },
+      (err) => {
+        console.warn('Location refresh failed', err);
+      },
+      { enableHighAccuracy: true }
+    ).finally(() => setLoading(false));
   };
+
+  // expose refreshLocation in context value
 
   const clearLocation = () => {
     try {
@@ -40,7 +67,7 @@ export function LocationProvider({ children }) {
     } catch (e) {
       console.error(e);
     }
-    setSavedLocation(null);
+    setSavedLocation(DEFAULT_FARM_LOCATION);
   };
 
   const openLocationModal = () => setIsModalOpen(true);
@@ -55,6 +82,8 @@ export function LocationProvider({ children }) {
         isModalOpen,
         openLocationModal,
         closeLocationModal,
+        loadingLocation: loading,
+        refreshLocation,
       }}
     >
       {children}

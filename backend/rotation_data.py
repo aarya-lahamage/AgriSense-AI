@@ -144,6 +144,52 @@ ROTATION_DATA = {
             "reason": "Diversifies root depth and utilizes residual phosphorous efficiently."
         }
     ],
+    "gram": [
+        {
+            "next_crop": "Sorghum / Jowar",
+            "season": "Kharif",
+            "reason": "Utilizes residual organic nitrogen fixed by gram and breaks soil pathogen cycles."
+        },
+        {
+            "next_crop": "Cotton",
+            "season": "Kharif",
+            "reason": "Deep-rooted cash crop that benefits from nitrogen fixed during the rabi gram season."
+        }
+    ],
+    "tur": [
+        {
+            "next_crop": "Wheat",
+            "season": "Rabi",
+            "reason": "Wheat benefits from residual nitrogen left by tur's root nodules, reducing urea requirement."
+        },
+        {
+            "next_crop": "Sorghum / Jowar",
+            "season": "Summer / Kharif",
+            "reason": "Non-legume cereal breaks tur wilt (Fusarium) cycle and uses residual fertility effectively."
+        },
+        {
+            "next_crop": "Maize",
+            "season": "Kharif",
+            "reason": "Heavy feeder that capitalizes on improved soil structure and nitrogen left by tur."
+        }
+    ],
+    "groundnut": [
+        {
+            "next_crop": "Wheat",
+            "season": "Rabi",
+            "reason": "Benefits from nitrogen fixed by groundnut and uses residual moisture in the soil profile."
+        },
+        {
+            "next_crop": "Sorghum / Jowar",
+            "season": "Rabi / Summer",
+            "reason": "Deep fibrous roots improve soil aeration after groundnut's pod-zone compaction."
+        },
+        {
+            "next_crop": "Safflower",
+            "season": "Rabi",
+            "reason": "Low water requirement oilseed that thrives on residual fertility in semi-arid groundnut belts."
+        }
+    ],
     "chickpea": [
         {
             "next_crop": "Sorghum / Jowar",
