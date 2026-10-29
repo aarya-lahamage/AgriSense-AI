@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { MapPin, Navigation, Thermometer, Droplets, Wind, CloudRain, AlertTriangle, CheckCircle2, Info, Flame, SprayCan, RefreshCw, Volume2, VolumeX } from 'lucide-react';
 import CropCalendar from '../components/CropCalendar';
 import { speakText, stopSpeech, isSpeaking } from '../utils/speech';
+import { useFarmLocation } from '../context/LocationContext';
 
 const API_BASE = 'http://127.0.0.1:8000';
 

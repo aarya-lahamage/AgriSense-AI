@@ -4,6 +4,7 @@ import { MapPin, Thermometer, Droplets, CloudRain, Sprout, Navigation, Printer, 
 import { useAuth } from '../context/AuthContext';
 import CropCalendar from '../components/CropCalendar';
 import { speakText, stopSpeech, isSpeaking } from '../utils/speech';
+import { useFarmLocation } from '../context/LocationContext';
 
 const API_BASE = 'http://127.0.0.1:8000';
 

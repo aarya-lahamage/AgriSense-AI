@@ -41,23 +41,41 @@ export function LocationProvider({ children }) {
   const [loading, setLoading] = useState(false);
 
   // Auto-resolve full weather & zone details whenever a location is chosen
+
+// Save a location (used by refreshLocation & other pages)
+const saveLocation = (loc) => {
+  try {
+    const newLoc = { ...savedLocation, ...loc };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newLoc));
+    setSavedLocation(newLoc);
+  } catch (e) {
+    console.error('Failed to save location', e);
+  }
+};
 // Refresh location on user request
   const refreshLocation = async () => {
-    if (!navigator.geolocation) {
-      console.warn('Geolocation not supported');
-      return;
-    }
-    setLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        saveLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude });
-      },
-      (err) => {
-        console.warn('Location refresh failed', err);
-      },
-      { enableHighAccuracy: true }
-    ).finally(() => setLoading(false));
-  };
+  // If we already have a saved location (not default), use it without re‑prompting the user.
+  if (savedLocation && savedLocation.lat && savedLocation.lon) {
+    // Location already fetched; no need to request geolocation again.
+    return;
+  }
+  if (!navigator.geolocation) {
+    console.warn('Geolocation not supported');
+    return;
+  }
+  setLoading(true);
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      saveLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+    },
+    (err) => {
+      console.warn('Location refresh failed', err);
+    },
+    { enableHighAccuracy: true }
+  ).finally(() => setLoading(false));
+};
+
+  
 
   // expose refreshLocation in context value
 
