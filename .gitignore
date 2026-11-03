@@ -56,3 +56,4 @@ uploads/
 outputs/
 # Allow the small crop recommendation model (3.4 MB)
 !models/crop_model.pkl
+!backend/models/**/*.pkl
