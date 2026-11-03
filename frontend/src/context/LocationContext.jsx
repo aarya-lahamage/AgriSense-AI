@@ -77,15 +77,17 @@ export function LocationProvider({ children }) {
         throw new Error(typeof detail === 'string' ? detail : 'Could not resolve this location.');
       }
       if (id !== requestId.current) return false;
+      const resolvedName = data?.place && data.place !== 'Current Farm Location'
+        ? data.place
+        : (location?.name && location.name !== 'Current location (GPS)' ? location.name : (data?.district || 'Current Farm Location'));
+
       const resolved = {
         ...base,
         ...data,
         lat,
         lon,
-        name: location?.source === 'gps'
-          ? (data?.place || data?.name || data?.location?.name || location?.name || 'Current location (GPS)')
-          : (location?.name || data?.place || data?.name || data?.location?.name || 'Selected location'),
-        district: location?.district || data?.district || '',
+        name: resolvedName,
+        district: data?.district || location?.district || '',
         weather: data?.weather ?? data?.location?.weather ?? null,
         zone: data?.zone ?? data?.soil ?? data?.location?.zone ?? null,
         zone_id: data?.zone_id ?? null,

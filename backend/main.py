@@ -176,19 +176,32 @@ def resolve_location(lat: float = None, lon: float = None, place: str = None, di
     else:
         try:
             geo_url = "https://nominatim.openstreetmap.org/reverse"
-            geo_params = {"format": "json", "lat": lat, "lon": lon, "zoom": 10}
-            geo_headers = {"User-Agent": "AgriSenseAI-StudentProject/1.0"}
-            geo_res = requests.get(geo_url, params=geo_params, headers=geo_headers, timeout=5)
-            address = geo_res.json().get("address", {})
+            geo_params = {"format": "json", "lat": lat, "lon": lon, "zoom": 14}
+            geo_headers = {"User-Agent": "AgriSenseAI-LocationService/1.1 (contact@agrisense.ai)"}
+            geo_res = requests.get(geo_url, params=geo_params, headers=geo_headers, timeout=6)
+            address = geo_res.json().get("address", {}) if geo_res.status_code == 200 else {}
+            
+            # Prefer specific village/town/suburb first
             place_name = (
-                address.get("town") or address.get("city") or address.get("village")
-                or address.get("suburb") or address.get("municipality")
-                or address.get("city_district") or address.get("hamlet")
-                or address.get("county") or "Your area"
+                address.get("village")
+                or address.get("town")
+                or address.get("suburb")
+                or address.get("city")
+                or address.get("hamlet")
+                or address.get("neighbourhood")
+                or address.get("municipality")
+                or address.get("county")
+                or "Current Farm Location"
             )
-            district_name = address.get("state_district") or address.get("county") or place_name
-        except Exception:
-            place_name, district_name = "Unknown", None
+            district_name = (
+                address.get("state_district")
+                or address.get("county")
+                or address.get("city")
+                or place_name
+            )
+        except Exception as e:
+            print(f"[resolve-location] Reverse geocode error: {e}")
+            place_name, district_name = "Current Farm Location", "Maharashtra"
 
     zone_id, zone_data = _match_zone(district_name, place_name)
 
