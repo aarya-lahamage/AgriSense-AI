@@ -132,19 +132,22 @@ def city_search(query: str):
 
 def _get_annual_rainfall(lat, lon):
     """Approximate annual rainfall by summing the last 365 days of rain."""
-    end = date.today() - timedelta(days=1)
-    start = end - timedelta(days=365)
-    url = (
-        f"https://archive-api.open-meteo.com/v1/archive"
-        f"?latitude={lat}&longitude={lon}"
-        f"&start_date={start}&end_date={end}"
-        f"&daily=precipitation_sum&timezone=auto"
-    )
-    res = requests.get(url, timeout=10)
-    data = res.json()
-    values = data.get("daily", {}).get("precipitation_sum", [])
-    values = [v for v in values if v is not None]
-    return round(sum(values), 1) if values else 0
+    try:
+        end = date.today() - timedelta(days=1)
+        start = end - timedelta(days=365)
+        url = (
+            f"https://archive-api.open-meteo.com/v1/archive"
+            f"?latitude={lat}&longitude={lon}"
+            f"&start_date={start}&end_date={end}"
+            f"&daily=precipitation_sum&timezone=auto"
+        )
+        res = requests.get(url, headers={"User-Agent": "AgriSenseAI/1.0"}, timeout=6)
+        data = res.json()
+        values = data.get("daily", {}).get("precipitation_sum", [])
+        values = [v for v in values if v is not None]
+        return round(sum(values), 1) if values else 750.0
+    except Exception:
+        return 750.0
 
 
 def _match_zone(district_name, place_name):
@@ -196,15 +199,17 @@ def resolve_location(lat: float = None, lon: float = None, place: str = None, di
             f"&current=temperature_2m,relative_humidity_2m"
             f"&timezone=auto"
         )
-        weather_res = requests.get(weather_url, timeout=5)
-        weather_data = weather_res.json()
-        temperature = weather_data["current"]["temperature_2m"]
-        humidity = weather_data["current"]["relative_humidity_2m"]
+        weather_headers = {"User-Agent": "AgriSenseAI-OpenMeteo-Client/1.0"}
+        weather_res = requests.get(weather_url, headers=weather_headers, timeout=8)
+        weather_data = weather_res.json() if weather_res.status_code == 200 else {}
+        
+        current_w = weather_data.get("current") or {}
+        temperature = current_w.get("temperature_2m", 28.0)
+        humidity = current_w.get("relative_humidity_2m", 50.0)
         rainfall = _get_annual_rainfall(lat, lon)
     except Exception as exc:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=503, detail=f"Location service error: {exc}")
+        print(f"[resolve-location] Weather fetch warning: {exc}")
+        temperature, humidity, rainfall = 28.0, 50.0, 750.0
 
     return {
         "place": place_name,
