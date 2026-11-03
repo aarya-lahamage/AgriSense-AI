@@ -119,6 +119,8 @@ export function LocationProvider({ children }) {
       navigator.geolocation.getCurrentPosition(
         async ({ coords }) => {
           try {
+            // accuracy is in metres; > 5000 m means IP-based (desktop) which is unreliable
+            const isLowAccuracy = coords.accuracy > 5000;
             const ok = await selectLocation({
               lat: coords.latitude,
               lon: coords.longitude,
@@ -126,6 +128,12 @@ export function LocationProvider({ children }) {
               accuracy: coords.accuracy,
               source: 'gps',
             });
+            if (isLowAccuracy) {
+              setError(
+                `GPS accuracy is low (~${Math.round(coords.accuracy / 1000)} km). `
+                + 'The detected location may be wrong. Use "Change" to search your village or city for precise results.',
+              );
+            }
             resolve(ok);
           } finally {
             setLoadingLocation(false);

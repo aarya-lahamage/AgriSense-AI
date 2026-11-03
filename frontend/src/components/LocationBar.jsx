@@ -35,7 +35,7 @@ export default function LocationBar() {
             <p className="text-xs text-[#A3B39C] mt-0.5">
               Auto-fetch hyper-local Open-Meteo weather radar, agro-spray safety windows, and district soil telemetry.
             </p>
-            {error && <p role="alert" className="mt-1 text-xs text-red-400">{error}</p>}
+            {error && <p role="alert" className="mt-1 text-xs text-amber-400">{error}</p>}
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
@@ -91,7 +91,7 @@ export default function LocationBar() {
               <span className="text-xs font-normal text-[#8E9B85] ml-1.5">({savedLocation.district})</span>
             )}
           </div>
-          {error && <p role="alert" className="mt-1 text-xs text-red-400">{error}</p>}
+          {error && <p role="alert" className="mt-1 text-xs text-amber-400">{error}</p>}
           {resolving && <p className="mt-1 text-xs text-[#BEF264]">Updating telemetry for this location…</p>}
         </div>
       </div>

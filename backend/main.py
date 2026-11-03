@@ -21,7 +21,7 @@ import assistant_service
 import mandi_service
 import disease_service
 import adaptive_service
-from soil_data import AGRO_CLIMATIC_ZONES, DISTRICT_TO_ZONE, MAHARASHTRA_CITIES
+from soil_data import AGRO_CLIMATIC_ZONES, DISTRICT_TO_ZONE, DISTRICT_ALIASES, MAHARASHTRA_CITIES
 
 app = FastAPI(
     title="AgriSense AI API",
@@ -165,7 +165,7 @@ def city_search(query: str):
                     or item.get("name")
                     or q.capitalize()
                 )
-                district_name = (
+                district_name = _normalize_district(
                     addr.get("state_district")
                     or addr.get("county")
                     or addr.get("city")
@@ -206,14 +206,36 @@ def _get_annual_rainfall(lat, lon):
         return 750.0
 
 
+def _normalize_district(raw):
+    """Resolve a raw district string from Nominatim to a canonical DISTRICT_TO_ZONE key."""
+    if not raw:
+        return raw
+    name = raw.strip()
+    # 1. Direct match
+    if name in DISTRICT_TO_ZONE:
+        return name
+    # 2. Check alias table (handles renamed districts and " District" suffix)
+    if name in DISTRICT_ALIASES:
+        return DISTRICT_ALIASES[name]
+    # 3. Strip common suffixes and retry
+    for suffix in (" District", " district"):
+        if name.endswith(suffix):
+            stripped = name[: -len(suffix)].strip()
+            if stripped in DISTRICT_TO_ZONE:
+                return stripped
+            if stripped in DISTRICT_ALIASES:
+                return DISTRICT_ALIASES[stripped]
+    return name
+
+
 def _match_zone(district_name, place_name):
     """Try to match a district (or fallback to place name) to a known zone."""
     for key in (district_name, place_name):
         if not key:
             continue
-        clean = key.replace(" District", "").strip()
-        if clean in DISTRICT_TO_ZONE:
-            zone_id = DISTRICT_TO_ZONE[clean]
+        canonical = _normalize_district(key)
+        if canonical in DISTRICT_TO_ZONE:
+            zone_id = DISTRICT_TO_ZONE[canonical]
             return zone_id, AGRO_CLIMATIC_ZONES[zone_id]
     return None, None
 
@@ -228,12 +250,13 @@ def resolve_location(lat: float = None, lon: float = None, place: str = None, di
         raise HTTPException(status_code=400, detail="This app currently supports Maharashtra locations only")
 
     if place and district:
-        place_name, district_name = place, district
+        place_name, district_name = place, _normalize_district(district)
     else:
         try:
             geo_url = "https://nominatim.openstreetmap.org/reverse"
-            geo_params = {"format": "json", "lat": lat, "lon": lon, "zoom": 14}
-            geo_headers = {"User-Agent": "AgriSenseAI-LocationService/1.1 (contact@agrisense.ai)"}
+            # zoom=16 gives neighbourhood-level precision (better than zoom=14)
+            geo_params = {"format": "json", "lat": lat, "lon": lon, "zoom": 16, "addressdetails": 1}
+            geo_headers = {"User-Agent": "AgriSenseAI-LocationService/1.2 (contact@agrisense.ai)"}
             geo_res = requests.get(geo_url, params=geo_params, headers=geo_headers, timeout=6)
             address = geo_res.json().get("address", {}) if geo_res.status_code == 200 else {}
             
@@ -249,12 +272,13 @@ def resolve_location(lat: float = None, lon: float = None, place: str = None, di
                 or address.get("county")
                 or "Current Farm Location"
             )
-            district_name = (
+            raw_district = (
                 address.get("state_district")
                 or address.get("county")
                 or address.get("city")
                 or place_name
             )
+            district_name = _normalize_district(raw_district)
         except Exception as e:
             print(f"[resolve-location] Reverse geocode error: {e}")
             place_name, district_name = "Current Farm Location", "Maharashtra"

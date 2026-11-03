@@ -113,6 +113,53 @@ DISTRICT_TO_ZONE = {
     "Gadchiroli": "eastern_vidarbha",
 }
 
+# Aliases for district names that Nominatim may return differently from
+# the canonical names used in DISTRICT_TO_ZONE above.  The 2023 Maharashtra
+# district renaming wave means Nominatim now returns new names for several
+# districts while our soil database still uses the older/canonical ones.
+DISTRICT_ALIASES = {
+    # Ahmednagar was officially renamed Ahilyanagar in 2023
+    "Ahilyanagar": "Ahmednagar",
+    "Ahilyanagar District": "Ahmednagar",
+    "Ahmednagar District": "Ahmednagar",
+    # Aurangabad renamed Chhatrapati Sambhajinagar
+    "Aurangabad District": "Chhatrapati Sambhajinagar",
+    # Osmanabad renamed Dharashiv
+    "Osmanabad District": "Dharashiv",
+    # Common Nominatim suffixes
+    "Pune District": "Pune",
+    "Nashik District": "Nashik",
+    "Nagpur District": "Nagpur",
+    "Kolhapur District": "Kolhapur",
+    "Satara District": "Satara",
+    "Solapur District": "Solapur",
+    "Sangli District": "Sangli",
+    "Latur District": "Latur",
+    "Beed District": "Beed",
+    "Jalgaon District": "Jalgaon",
+    "Dhule District": "Dhule",
+    "Nandurbar District": "Nandurbar",
+    "Jalna District": "Jalna",
+    "Parbhani District": "Parbhani",
+    "Hingoli District": "Hingoli",
+    "Nanded District": "Nanded",
+    "Amravati District": "Amravati",
+    "Akola District": "Akola",
+    "Washim District": "Washim",
+    "Buldhana District": "Buldhana",
+    "Yavatmal District": "Yavatmal",
+    "Wardha District": "Wardha",
+    "Chandrapur District": "Chandrapur",
+    "Gadchiroli District": "Gadchiroli",
+    "Bhandara District": "Bhandara",
+    "Gondia District": "Gondia",
+    "Ratnagiri District": "Ratnagiri",
+    "Sindhudurg District": "Sindhudurg",
+    "Thane District": "Thane",
+    "Raigad District": "Raigad",
+    "Palghar District": "Palghar",
+}
+
 
 MAHARASHTRA_CITIES = [
     {"name": "Mumbai", "district": "Mumbai", "lat": 19.0760, "lon": 72.8777},
