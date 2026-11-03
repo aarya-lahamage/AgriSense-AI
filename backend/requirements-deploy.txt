@@ -1,19 +1,19 @@
 # Requirements for Linux/cloud deployment (Render, Railway, etc.)
-# winocr is excluded — Windows-only. OCR falls back to Tesseract on Linux.
+# Using loose/compatible version specifiers so Python 3.11/3.12 installs clean prebuilt wheels
 
-fastapi==0.141.1
-uvicorn==0.52.4
-python-dotenv==1.2.3
-requests==2.34.2
-scikit-learn==1.9.0
-numpy==2.5.2
-pandas==3.0.5
-joblib==1.6.0
-Pillow
-pytesseract==0.3.13
-PyJWT==2.14.0
-python-multipart==0.0.32
-pydantic==2.13.5
-google-generativeai
-httpx>=0.23.0
-adaption==0.18.0
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+scikit-learn>=1.4.0,<2.0.0
+numpy>=1.26.0,<3.0.0
+pandas>=2.2.0
+joblib>=1.3.0
+Pillow>=10.0.0
+pytesseract>=0.3.10
+PyJWT>=2.8.0
+python-multipart>=0.0.9
+pydantic>=2.6.0
+google-generativeai>=0.4.0
+httpx>=0.24.0
+adaption>=0.18.0
