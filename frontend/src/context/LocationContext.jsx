@@ -4,10 +4,18 @@ const LocationContext = createContext(null);
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 const STORAGE_KEY = 'agrisense:selected-location';
 
+const DEFAULT_LOCATION = {
+  name: 'Pune',
+  district: 'Pune',
+  lat: 18.5204,
+  lon: 73.8567,
+  source: 'default',
+};
+
 function readStoredLocation() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
+    if (!raw) return DEFAULT_LOCATION;
     const value = JSON.parse(raw);
     if (Number.isFinite(Number(value?.lat)) && Number.isFinite(Number(value?.lon))) {
       return { ...value, lat: Number(value.lat), lon: Number(value.lon) };
@@ -15,7 +23,7 @@ function readStoredLocation() {
   } catch {
     // Ignore invalid or unavailable local storage.
   }
-  return null;
+  return DEFAULT_LOCATION;
 }
 
 function gpsErrorMessage(error) {

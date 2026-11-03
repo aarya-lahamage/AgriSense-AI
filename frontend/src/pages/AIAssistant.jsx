@@ -30,11 +30,11 @@ const QUICK_QUESTIONS = [
 function makeWelcomeMessage(name) {
   return {
     role: 'assistant',
-    text: `Namaste${name ? `, ${name}` : ''}! I am your AgriSense AI Agronomist, powered by our Adaptive Agriculture Knowledge Base. Ask me about crop nutrition, pest outbreaks, weather spraying windows, APMC mandi rates, or government subsidies in Marathi, Hindi, or English.`,
+    text: `Namaste${name ? `, ${name}` : ''}! I am your AgriSense AI Agronomist. Ask me about crop nutrition, pest outbreaks, weather spraying windows, APMC mandi rates, or government subsidies in Marathi, Hindi, or English.`,
     suggestions: [
-      { label: 'Adaptive Intelligence Pipeline', path: '/adaptive-intelligence' },
       { label: 'Recommend a crop', path: '/crop-recommendation' },
       { label: 'Scan leaf for disease', path: '/disease-detection' },
+      { label: 'Check Weather Forecast', path: '/weather-advisory' },
     ],
   };
 }

@@ -42,11 +42,9 @@ import Expenses from './pages/Expenses';
 import SoilCardOCR from './pages/SoilCardOCR';
 import FarmBudgetPlanner from './pages/FarmBudgetPlanner';
 import MandiRates from './pages/MandiRates';
-import AdaptiveIntelligence from './pages/AdaptiveIntelligence';
 
 const navItems = [
   { icon: Home, label: 'Home', path: '/' },
-  { icon: Cpu, label: 'Adaptive Intelligence', path: '/adaptive-intelligence' },
   { icon: Sprout, label: 'Crop Advisor', path: '/crop-recommendation' },
   { icon: ScanLine, label: 'Disease Scan', path: '/disease-detection' },
   { icon: CloudSun, label: 'Weather', path: '/weather-advisory' },
@@ -301,7 +299,6 @@ function ProtectedLayout() {
           <LocationBar />
           <Routes>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/adaptive-intelligence" element={<AdaptiveIntelligence />} />
             <Route path="/crop-recommendation" element={<CropRecommendation />} />
             <Route path="/disease-detection" element={<DiseaseDetection />} />
             <Route path="/weather-advisory" element={<WeatherAdvisory />} />
