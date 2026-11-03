@@ -121,13 +121,69 @@ def soil_lookup(zone_id: str):
 
 @app.get("/city-search")
 def city_search(query: str):
-    q = query.strip().lower()
-    if len(q) < 1:
+    q = query.strip()
+    if len(q) < 2:
         return {"results": []}
 
-    matches = [c for c in MAHARASHTRA_CITIES if c["name"].lower().startswith(q)]
-    matches.sort(key=lambda x: x["name"])
-    return {"results": matches[:10]}
+    results = []
+
+    # 1. Match local popular Maharashtra cities first
+    q_lower = q.lower()
+    local_matches = [
+        {"name": c["name"], "district": c["district"], "lat": c["lat"], "lon": c["lon"]}
+        for c in MAHARASHTRA_CITIES
+        if q_lower in c["name"].lower() or q_lower in c["district"].lower()
+    ]
+    results.extend(local_matches)
+
+    # 2. Real-time Live Geocoding via Nominatim for ANY village, taluka, town, or 6-digit Pincode
+    try:
+        search_query = f"{q}, Maharashtra, India" if not q.isdigit() else f"{q}, India"
+        geo_url = "https://nominatim.openstreetmap.org/search"
+        params = {
+            "format": "json",
+            "q": search_query,
+            "addressdetails": 1,
+            "limit": 6,
+        }
+        headers = {"User-Agent": "AgriSenseAI-LocationSearch/1.2 (contact@agrisense.ai)"}
+        res = requests.get(geo_url, params=params, headers=headers, timeout=5)
+        if res.status_code == 200:
+            for item in res.json():
+                lat = float(item.get("lat", 0))
+                lon = float(item.get("lon", 0))
+                if not (15.0 <= lat <= 23.0 and 72.0 <= lon <= 81.5):
+                    continue
+
+                addr = item.get("address", {})
+                place_name = (
+                    addr.get("village")
+                    or addr.get("town")
+                    or addr.get("suburb")
+                    or addr.get("city")
+                    or addr.get("hamlet")
+                    or item.get("name")
+                    or q.capitalize()
+                )
+                district_name = (
+                    addr.get("state_district")
+                    or addr.get("county")
+                    or addr.get("city")
+                    or "Maharashtra"
+                )
+
+                # Avoid duplicate places
+                if not any(abs(r["lat"] - lat) < 0.05 and abs(r["lon"] - lon) < 0.05 for r in results):
+                    results.append({
+                        "name": place_name,
+                        "district": district_name,
+                        "lat": round(lat, 4),
+                        "lon": round(lon, 4),
+                    })
+    except Exception as e:
+        print(f"[city-search] Nominatim search warning: {e}")
+
+    return {"results": results[:12]}
 
 
 def _get_annual_rainfall(lat, lon):

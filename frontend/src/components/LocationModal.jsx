@@ -104,7 +104,7 @@ export default function LocationModal() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Type city or district (e.g. Pune, Nashik)..."
+              placeholder="Search village, taluka, district or PIN (e.g. Sangamner, 422605)..."
               autoFocus
               className="w-full bg-[#10190D] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs sm:text-sm text-[#FDFAF2] placeholder-[#6B7C63] focus:outline-none focus:ring-2 focus:ring-[#84CC16]"
             />
