@@ -1,0 +1,19 @@
+AgriSense AI — Central Location Fix Patch
+
+HOW TO APPLY
+1. Stop the Vite frontend server (Ctrl+C).
+2. Extract this ZIP into the root of your existing AgriSense-AI project folder.
+   The archive keeps the `src/...` folder structure; allow it to overwrite files.
+3. Start the frontend again with `npm run dev`.
+4. In the app, use the sidebar's farm-location button to select a Maharashtra city or use GPS.
+   The same saved location is used by Dashboard, Crop Recommendation, Weather Advisory,
+   and Fertilizer Recommendation. Weather data reloads when the selected location changes.
+
+NOTES
+- The patch uses VITE_API_BASE_URL when configured; otherwise it uses http://127.0.0.1:8000.
+- Browser GPS works on localhost/HTTPS and requires permission. The current backend only supports
+  locations within Maharashtra.
+- The uploaded frontend ZIP did not contain package.json/node_modules, so a full Vite production
+  build could not be run here. JSX syntax transpilation passed for all 24 JSX files in the upload.
+- Keep your existing backend, models, package.json, and other project files. This is a patch, not
+  a replacement for the entire project.

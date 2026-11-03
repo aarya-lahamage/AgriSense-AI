@@ -6,6 +6,14 @@ Supports Hinglish, Hindi, Marathi keywords, and English queries with intelligent
 """
 
 import re
+import os
+from pathlib import Path
+
+import requests
+from dotenv import load_dotenv
+
+# Load secrets from backend/.env without exposing them to the frontend.
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 # Stopwords to filter out for cleaner intent matching
 STOPWORDS = {
@@ -288,8 +296,9 @@ def _tokenize(text: str) -> set:
     return {w for w in words if w not in STOPWORDS and len(w) > 1}
 
 
-def get_response(message: str) -> dict:
-    text = message.lower().strip()
+def get_rule_response(message: str) -> dict:
+    # Normalize common punctuation so phrases like "PM-Kisan" match "pm kisan".
+    text = re.sub(r"[-_/]+", " ", message.lower().strip())
 
     # 1. Greetings
     if any(text == g or text.startswith(g + " ") for g in GREETINGS):
@@ -312,7 +321,7 @@ def get_response(message: str) -> dict:
     for intent in NAVIGATION_INTENTS:
         if any(kw in text for kw in intent["keywords"]):
             primary = intent["reply"]
-            alternate = f"You can also {intent["suggestion"]["label"].lower()} via the navigation menu."
+            alternate = f"You can also {intent['suggestion']['label'].lower()} via the navigation menu."
             return {
                 "replyPrimary": primary,
                 "replyAlternate": alternate,
@@ -346,13 +355,9 @@ def get_response(message: str) -> dict:
 
     # 4. Smart Fallback with Actionable Prompts
     fallback_primary = (
-        "I couldn't pinpoint your exact agronomic query, but I can help you with:\n"
-        "• Diagnosing leaf diseases and pest attacks (Yellow leaves, Pink bollworm, Blight, Rust)\n"
-        "• Fertilizer dosages for Urea, DAP, Potash, and Nano Urea\n"
-        "• Safe spraying weather conditions & irrigation timing\n"
-        "• Live Maharashtra Mandi rates and MSP comparisons\n"
-        "• Government schemes (PM-Kisan, ₹1 Pik Vima, Solar pump subsidy)\n\n"
-        "Try rephrasing with crop name and symptom (e.g., 'tamatar me patte peele kyu ho rahe hai' or 'urea dosage')."
+        "I can answer common farming questions from my built-in knowledge, but this question needs the general AI model. "
+        "To enable open-ended ChatGPT-style replies, add a valid GEMINI_API_KEY to backend/.env and restart the backend.\n\n"
+        "Meanwhile, ask me about crop diseases, soil, fertilizers, irrigation, weather, mandi rates, or government schemes."
     )
     fallback_alternate = "You can also browse the app's sections for crop recommendation, disease detection, and more."
     return {
@@ -365,3 +370,137 @@ def get_response(message: str) -> dict:
             {"label": "View Government Schemes", "path": "/government-schemes"},
         ],
     }
+
+SYSTEM_INSTRUCTION = """You are AgriSense AI, an intelligent, empathetic agronomic assistant for Indian and Maharashtra farmers. You provide accurate, scientifically sound advice on crop selection, pest & disease management, fertilizer dosages (NPK), irrigation, mandi market rates, and government schemes. Answer naturally in the farmer's language (Marathi, Hindi, Hinglish, or English). If verified agronomic context from our Adaptive Agriculture Intelligence Knowledge Base is provided in the prompt, prioritize its verified dosage, chemical safety guidelines, and local best practices."""
+
+def retrieve_adaptive_grounding(message: str) -> dict:
+    """Retrieve verified agricultural knowledge from the Adaptive Dataset."""
+    try:
+        from adaptive_service import get_dataset_records
+        records = get_dataset_records()
+        if not records:
+            return None
+        tokens = set(re.findall(r"\w+", message.lower()))
+        best = None
+        best_score = 0
+        for r in records:
+            combined = f"{r.get('prompt', '')} {r.get('topic', '')} {r.get('crop', '')} {r.get('region', '')}".lower()
+            r_tokens = set(re.findall(r"\w+", combined))
+            overlap = len(tokens & r_tokens)
+            if overlap > best_score:
+                best_score = overlap
+                best = r
+        if best and best_score >= 2:
+            return best
+    except Exception:
+        pass
+    return None
+
+def get_response(message: str, history=None) -> dict:
+    """Adaptive Agriculture Intelligence Agent workflow with domain grounding & feedback support."""
+    # Step 1: Check verified adaptive knowledge base for domain grounding
+    grounding = retrieve_adaptive_grounding(message)
+    grounding_info = None
+    if grounding:
+        grounding_info = {
+            "source": grounding.get("source", "Verified ICAR/MPKV Advisory"),
+            "verified_by": grounding.get("verified_by", "Agronomist"),
+            "topic": grounding.get("topic", "General Agriculture"),
+            "crop": grounding.get("crop", "All Crops"),
+            "dataset_id": grounding.get("id", "AGRI-MH"),
+            "verification_status": grounding.get("verification_status", "verified")
+        }
+
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        res = get_rule_response(message)
+        if grounding:
+            res["grounding"] = grounding_info
+            res["verifiedAnswer"] = grounding.get("response")
+        return res
+
+    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
+    contents = []
+    if isinstance(history, list):
+        for item in history[-12:]:
+            if not isinstance(item, dict):
+                continue
+            role = item.get("role")
+            text = item.get("content") or item.get("text")
+            if role not in ("user", "assistant", "model") or not isinstance(text, str) or not text.strip():
+                continue
+            contents.append({
+                "role": "model" if role in ("assistant", "model") else "user",
+                "parts": [{"text": text[:5000]}],
+            })
+
+    user_text = message[:10000]
+    if grounding:
+        user_text += f"\n\n[VERIFIED AGRONOMIC ADAPTIVE CONTEXT: From {grounding_info['source']} ({grounding_info['verified_by']}): {grounding['response']}]"
+
+    contents.append({"role": "user", "parts": [{"text": user_text}]})
+
+    payload = {
+        "system_instruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
+        "contents": contents,
+        "generationConfig": {"temperature": 0.5, "maxOutputTokens": 1400},
+    }
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    try:
+        response = requests.post(
+            url,
+            params={"key": api_key},
+            json=payload,
+            timeout=40,
+        )
+        if response.status_code >= 400:
+            detail = "Gemini API request failed. Check the API key, model name, and API quota."
+            try:
+                provider_message = response.json().get("error", {}).get("message", "")
+                if provider_message:
+                    detail = provider_message[:250]
+            except (ValueError, AttributeError):
+                pass
+            raise RuntimeError(detail)
+        data = response.json()
+        candidates = data.get("candidates") or []
+        parts = (candidates[0].get("content", {}).get("parts", []) if candidates else [])
+        answer = "\n".join(part.get("text", "") for part in parts if isinstance(part, dict)).strip()
+        if not answer:
+            raise RuntimeError("The AI model returned an empty answer. Please try again.")
+
+        rule_data = get_rule_response(message)
+        return {
+            "reply": answer,
+            "replyPrimary": answer,
+            "replyAlternate": rule_data.get("replyAlternate", ""),
+            "suggestions": rule_data.get("suggestions", []),
+            "grounding": grounding_info
+        }
+    except (requests.RequestException, ValueError, RuntimeError) as exc:
+        rule_data = get_rule_response(message)
+        if grounding:
+            # High-confidence verified answer from Adaptive KB
+            return {
+                "reply": grounding["response"],
+                "replyPrimary": grounding["response"],
+                "replyAlternate": rule_data.get("replyAlternate", ""),
+                "suggestions": rule_data.get("suggestions", []),
+                "grounding": grounding_info
+            }
+        is_generic_fallback = "general AI model" in rule_data.get("replyPrimary", "")
+        if is_generic_fallback:
+            return {
+                "reply": (
+                    "I couldn't connect to the general AI model just now. Please check the GEMINI_API_KEY, "
+                    "GEMINI_MODEL, internet connection, and API quota in the backend settings, then try again."
+                ),
+                "suggestions": [],
+            }
+        return {
+            "reply": rule_data.get("replyPrimary", "I couldn't answer that right now."),
+            "replyPrimary": rule_data.get("replyPrimary", ""),
+            "replyAlternate": rule_data.get("replyAlternate", ""),
+            "suggestions": rule_data.get("suggestions", []),
+            "grounding": None
+        }

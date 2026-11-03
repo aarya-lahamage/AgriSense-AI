@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, MapPin, LogOut, Sprout, FlaskConical, TrendingUp, Clock, Pencil, Trash2, X, Check } from 'lucide-react';
+import { Mail, MapPin, LogOut, Sprout, FlaskConical, TrendingUp, Clock, Pencil, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import SpotlightCard from '../components/SpotlightCard';
 
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
 const MODULE_ICONS = {
   crop: Sprout,
@@ -38,7 +39,7 @@ function Profile() {
   // Delete history state
   const [deletingHistory, setDeletingHistory] = useState(false);
 
-  const fetchHistory = () => {
+  const fetchHistory = useCallback(() => {
     if (!token) return;
     fetch(`${API_BASE}/history`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -47,30 +48,30 @@ function Profile() {
       .then((data) => setHistory(data.history || []))
       .catch(() => {})
       .finally(() => setLoadingHistory(false));
-  };
+  }, [token]);
 
   useEffect(() => {
     fetchHistory();
-  }, [token]);
+  }, [fetchHistory]);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
-
-  const startEdit = () => {
+  const handleStartEdit = () => {
     setEditName(user?.name || '');
     setEditRegion(user?.region || '');
     setEditError('');
     setEditing(true);
   };
 
-  const cancelEdit = () => {
+  const handleCancelEdit = () => {
     setEditing(false);
     setEditError('');
   };
 
-  const saveEdit = async () => {
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    if (!editName.trim()) {
+      setEditError('Name cannot be empty');
+      return;
+    }
     setSaving(true);
     setEditError('');
     try {
@@ -80,12 +81,14 @@ function Profile() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ name: editName, region: editRegion }),
+        body: JSON.stringify({ name: editName.trim(), region: editRegion.trim() || null }),
       });
-      if (!res.ok) throw new Error('Failed to update profile');
-      const updated = await res.json();
-      // Update the auth context with new user data
-      login(token, updated);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || 'Failed to update profile');
+      }
+      const updatedUser = await res.json();
+      login(token, updatedUser);
       setEditing(false);
     } catch (err) {
       setEditError(err.message);
@@ -95,149 +98,166 @@ function Profile() {
   };
 
   const handleDeleteHistory = async () => {
-    if (!confirm('Delete ALL prediction history? This cannot be undone.')) return;
+    if (!window.confirm('Clear all your prediction logs and diagnostic history?')) return;
     setDeletingHistory(true);
     try {
       const res = await fetch(`${API_BASE}/history`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error('Failed to delete');
-      setHistory([]);
+      if (res.ok) {
+        setHistory([]);
+      }
     } catch {
-      // silently fail
+      // silently handle
     } finally {
       setDeletingHistory(false);
     }
   };
 
-  if (!user) return null;
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   return (
-    <div className="w-full max-w-md mx-auto">
-      <h2 className="font-serif text-[26px] font-medium text-[#22301A] mb-1">Profile</h2>
-      <p className="text-[#7A8A6A] text-sm mb-7">Your account details.</p>
+    <div className="w-full max-w-2xl mx-auto space-y-6 pb-12 agri-animate-fade-in">
+      {/* Profile Card */}
+      <SpotlightCard
+        spotlightColor="rgba(132, 204, 22, 0.18)"
+        borderColor="rgba(132, 204, 22, 0.45)"
+        className="p-6 sm:p-8 space-y-6"
+      >
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#1E3319] to-[#142311] text-[#84CC16] font-serif font-bold text-2xl flex items-center justify-center border border-[#84CC16]/40 shadow-lg">
+              {user?.name?.charAt(0).toUpperCase() || '?'}
+            </div>
+            <div>
+              <h2 className="text-xl font-serif font-bold text-[#FDFAF2]">{user?.name || 'Farmer'}</h2>
+              <div className="text-xs text-[#8E9B85] flex items-center gap-1.5 mt-0.5">
+                <Mail size={13} />
+                <span>{user?.email}</span>
+              </div>
+              <div className="text-xs text-[#BEF264] font-semibold flex items-center gap-1.5 mt-1">
+                <MapPin size={13} className="text-[#84CC16]" />
+                <span>{user?.region || 'Maharashtra'}</span>
+              </div>
+            </div>
+          </div>
 
-      <div className="bg-white rounded-2xl p-6 shadow-[0_1px_3px_rgba(34,48,26,0.06),0_8px_24px_rgba(34,48,26,0.05)] mb-5">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-14 h-14 rounded-full bg-[#22301A] flex items-center justify-center text-white text-lg font-medium">
-            {user.name?.charAt(0).toUpperCase()}
-          </div>
-          <div className="flex-1">
-            <div className="text-lg font-medium text-[#22301A]">{user.name}</div>
-            <div className="text-xs text-[#7A8A6A]">{user.region || 'No region set'}</div>
-          </div>
           {!editing && (
             <button
-              onClick={startEdit}
-              className="text-[#5B7A3A] hover:text-[#22301A] transition p-1.5 rounded-lg hover:bg-[#F6F4EC]"
-              title="Edit profile"
+              onClick={handleStartEdit}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold bg-[#10190D] hover:bg-[#1C2B18] text-[#FDFAF2] px-3.5 py-2 rounded-xl border border-white/15 transition cursor-pointer"
             >
-              <Pencil size={16} />
+              <Pencil size={13} />
+              <span>Edit Profile</span>
             </button>
           )}
         </div>
 
-        {/* Edit form */}
+        {/* Edit Profile Form */}
         {editing && (
-          <div className="bg-[#F6F4EC] rounded-xl p-4 mb-4 space-y-3">
-            <div>
-              <label className="text-xs text-[#7A8A6A] mb-1 block">Name</label>
-              <input
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                className="w-full bg-white rounded-xl px-3.5 py-2.5 text-sm text-[#22301A] outline-none focus:ring-2 focus:ring-[#5B7A3A]/30"
-              />
+          <form onSubmit={handleSaveProfile} className="bg-[#0B1309]/90 p-4.5 rounded-2xl border border-white/10 space-y-3.5">
+            <div className="text-xs font-bold text-[#84CC16] uppercase tracking-wider">Edit Account Details</div>
+            {editError && <p className="text-xs text-red-400">{editError}</p>}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-[#8E9B85] mb-1">Full Name</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full bg-[#10190D] border border-white/10 rounded-xl px-3 py-2 text-xs font-semibold text-[#FDFAF2] focus:outline-none focus:ring-2 focus:ring-[#84CC16]"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-[#8E9B85] mb-1">Farming Region / District</label>
+                <input
+                  type="text"
+                  value={editRegion}
+                  onChange={(e) => setEditRegion(e.target.value)}
+                  className="w-full bg-[#10190D] border border-white/10 rounded-xl px-3 py-2 text-xs font-semibold text-[#FDFAF2] focus:outline-none focus:ring-2 focus:ring-[#84CC16]"
+                />
+              </div>
             </div>
-            <div>
-              <label className="text-xs text-[#7A8A6A] mb-1 block">Region</label>
-              <input
-                type="text"
-                value={editRegion}
-                onChange={(e) => setEditRegion(e.target.value)}
-                placeholder="e.g. Pune, Maharashtra"
-                className="w-full bg-white rounded-xl px-3.5 py-2.5 text-sm text-[#22301A] outline-none focus:ring-2 focus:ring-[#5B7A3A]/30"
-              />
-            </div>
-            {editError && <p className="text-xs text-red-500">{editError}</p>}
-            <div className="flex gap-2">
+            <div className="flex justify-end gap-2 pt-1">
               <button
-                onClick={saveEdit}
+                type="button"
+                onClick={handleCancelEdit}
+                className="px-3.5 py-1.5 rounded-xl border border-white/15 text-xs font-semibold text-[#8E9B85] hover:bg-white/10 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
                 disabled={saving}
-                className="flex-1 flex items-center justify-center gap-1.5 bg-[#5B7A3A] text-white text-sm font-medium py-2.5 rounded-xl hover:bg-[#4A6830] transition disabled:opacity-50"
+                className="agri-btn-primary px-4 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer"
               >
-                <Check size={14} /> {saving ? 'Saving...' : 'Save'}
-              </button>
-              <button
-                onClick={cancelEdit}
-                className="flex items-center justify-center gap-1.5 bg-white text-[#22301A] text-sm font-medium py-2.5 px-4 rounded-xl hover:bg-[#F0EEE4] transition border border-[#E5E0D0]"
-              >
-                <X size={14} /> Cancel
+                {saving ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
-          </div>
+          </form>
         )}
 
-        <div className="space-y-3 mb-6">
-          <div className="bg-[#F6F4EC] rounded-xl p-3.5 flex items-center gap-3">
-            <Mail size={16} className="text-[#8A8A6A]" />
-            <span className="text-sm text-[#22301A]">{user.email}</span>
-          </div>
-          <div className="bg-[#F6F4EC] rounded-xl p-3.5 flex items-center gap-3">
-            <MapPin size={16} className="text-[#8A8A6A]" />
-            <span className="text-sm text-[#22301A]">{user.region || 'Not set'}</span>
-          </div>
+        <div className="pt-2 flex justify-between items-center border-t border-white/10">
+          <span className="text-xs text-[#8E9B85]">Registered Account • AgriSense 2.0</span>
+          <button
+            onClick={handleLogout}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#F87171] hover:bg-red-950/40 border border-transparent hover:border-red-500/30 px-3.5 py-2 rounded-xl transition cursor-pointer"
+          >
+            <LogOut size={14} />
+            <span>Sign Out</span>
+          </button>
         </div>
+      </SpotlightCard>
 
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center justify-center gap-2 bg-red-50 text-red-600 text-sm font-medium py-3 rounded-xl hover:bg-red-100 transition"
-        >
-          <LogOut size={16} />
-          Log Out
-        </button>
-      </div>
+      {/* Prediction History Stream */}
+      <div className="agri-glass-card p-6 sm:p-8 space-y-4">
+        <div className="flex items-center justify-between pb-2 border-b border-white/10">
+          <div>
+            <h3 className="text-sm font-serif font-bold text-[#FDFAF2]">Diagnostic &amp; Prediction Logs</h3>
+            <p className="text-xs text-[#8E9B85]">Recent actions and ML recommendations associated with your farm</p>
+          </div>
 
-      <div className="bg-white rounded-2xl p-6 shadow-[0_1px_3px_rgba(34,48,26,0.06),0_8px_24px_rgba(34,48,26,0.05)]">
-        <div className="flex items-center justify-between mb-3.5">
-          <h3 className="text-[13px] font-semibold text-[#22301A] uppercase tracking-wide">
-            Recent Activity
-          </h3>
           {history.length > 0 && (
             <button
               onClick={handleDeleteHistory}
               disabled={deletingHistory}
-              className="text-[11px] text-red-500 hover:text-red-700 flex items-center gap-1 transition disabled:opacity-50"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#F87171] hover:underline cursor-pointer"
             >
-              <Trash2 size={12} /> {deletingHistory ? 'Deleting...' : 'Clear All'}
+              <Trash2 size={12} />
+              <span>Clear History</span>
             </button>
           )}
         </div>
 
-        {loadingHistory && <p className="text-xs text-[#A8A391]">Loading...</p>}
-
-        {!loadingHistory && history.length === 0 && (
-          <div className="text-center py-6">
-            <Clock size={22} strokeWidth={1.5} className="text-[#D8D2BE] mx-auto mb-2" />
-            <p className="text-xs text-[#A8A391]">
-              No predictions yet — try Crop Advisor, Fertilizer, or Yield &amp; Profit.
-            </p>
-          </div>
-        )}
-
-        {!loadingHistory && history.length > 0 && (
+        {loadingHistory ? (
+          <div className="py-8 text-center text-xs text-[#8E9B85]">Loading prediction activity...</div>
+        ) : history.length === 0 ? (
+          <div className="py-8 text-center text-xs text-[#8E9B85]">No recorded predictions yet. Run your first crop recommendation or leaf scan.</div>
+        ) : (
           <div className="space-y-2.5">
             {history.map((item) => {
-              const Icon = MODULE_ICONS[item.module] || Clock;
+              const Icon = MODULE_ICONS[item.module] || Sprout;
               return (
-                <div key={item.id} className="flex items-start gap-3 bg-[#F6F4EC] rounded-xl p-3.5">
-                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm">
-                    <Icon size={14} strokeWidth={1.8} className="text-[#5B7A3A]" />
+                <div
+                  key={item.id}
+                  className="bg-[#0B1309]/80 p-3.5 rounded-2xl border border-white/10 flex items-start gap-3 hover:border-white/20 transition"
+                >
+                  <div className="w-8 h-8 rounded-xl bg-[#84CC16]/20 text-[#BEF264] border border-[#84CC16]/30 flex items-center justify-center shrink-0 mt-0.5">
+                    <Icon size={16} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-[#22301A] leading-snug">{item.summary}</p>
-                    <p className="text-[11px] text-[#A8A391] mt-0.5">{timeAgo(item.created_at)}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-[#FDFAF2] capitalize">{item.module} Diagnostic</span>
+                      <span className="text-[10px] text-[#8E9B85] flex items-center gap-1 shrink-0">
+                        <Clock size={11} />
+                        {timeAgo(item.created_at)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#A3B39C] mt-1 leading-relaxed truncate">{item.summary}</p>
                   </div>
                 </div>
               );

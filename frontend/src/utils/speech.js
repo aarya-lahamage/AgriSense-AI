@@ -3,6 +3,15 @@
  * 100% browser native, 0 API keys, 0 network latency.
  */
 
+let cachedVoices = [];
+
+if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+  cachedVoices = window.speechSynthesis.getVoices();
+  window.speechSynthesis.onvoiceschanged = () => {
+    cachedVoices = window.speechSynthesis.getVoices();
+  };
+}
+
 export function speakText(text, onEnd) {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
     console.warn('Speech synthesis not supported in this browser.');
@@ -26,7 +35,7 @@ export function speakText(text, onEnd) {
   utterance.pitch = 1.0;
 
   // Try to find an Indian English or Hindi voice
-  const voices = window.speechSynthesis.getVoices();
+  const voices = cachedVoices.length > 0 ? cachedVoices : window.speechSynthesis.getVoices();
   const preferredVoice = voices.find(
     (v) =>
       v.lang.includes('en-IN') ||

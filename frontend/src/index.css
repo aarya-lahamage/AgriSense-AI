@@ -1,11 +1,31 @@
 @import "tailwindcss";
 
-
 @theme {
-  --font-sans: 'Manrope', system-ui, sans-serif;
-  --font-serif: 'Fraunces', serif;
+  /* Typography */
+  --font-sans: 'Manrope', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-serif: 'Fraunces', Georgia, serif;
+
+  /* Premium Obsidian & Deep Forest Night Palette */
+  --color-obsidian-950: #070B06;
+  --color-obsidian-900: #0B1209;
+  --color-obsidian-850: #10190D;
+  --color-obsidian-800: #162212;
+  --color-obsidian-750: #1C2B18;
+  --color-obsidian-700: #24351F;
+
+  /* Glowing Bioluminescent Accents */
+  --color-emerald-neon: #10B981;
+  --color-emerald-glow: rgba(16, 185, 129, 0.45);
+  --color-lime-glow: rgba(132, 204, 22, 0.45);
+  --color-cyan-glow: rgba(56, 189, 248, 0.45);
+  --color-amber-glow: rgba(245, 158, 11, 0.45);
+
+  /* Glass Border Accents */
+  --color-glass-border: rgba(255, 255, 255, 0.12);
+  --color-glass-border-bright: rgba(255, 255, 255, 0.22);
 }
 
+/* Base Body Styles */
 html,
 body,
 #root {
@@ -15,8 +35,13 @@ body,
 
 body {
   font-family: var(--font-sans);
+  background-color: #070B06;
+  color: #E2E8F0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
+/* Number Inputs Reset */
 input[type="number"] {
   -moz-appearance: textfield;
   appearance: textfield;
@@ -27,6 +52,279 @@ input[type="number"]::-webkit-inner-spin-button {
   margin: 0;
 }
 
+/* Futuristic Glowing Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(11, 18, 9, 0.8);
+}
+::-webkit-scrollbar-thumb {
+  background: #1C2B18;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2E4726;
+  box-shadow: 0 0 10px rgba(132, 204, 22, 0.4);
+}
+
+/* Glassmorphism Panels */
+.agri-glass-card {
+  background: linear-gradient(135deg, rgba(16, 25, 13, 0.78) 0%, rgba(11, 18, 9, 0.88) 100%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
+  border-radius: 1.25rem;
+}
+
+.agri-glass-card-interactive {
+  background: linear-gradient(135deg, rgba(16, 25, 13, 0.78) 0%, rgba(11, 18, 9, 0.88) 100%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
+  border-radius: 1.25rem;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.agri-glass-card-interactive:hover {
+  border-color: rgba(132, 204, 22, 0.4);
+  box-shadow: 0 12px 36px 0 rgba(0, 0, 0, 0.6), 0 0 20px rgba(132, 204, 22, 0.18);
+  transform: translateY(-2px);
+}
+
+/* Common Dark Form Controls & Buttons */
+.agri-input {
+  background: rgba(16, 25, 13, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.75rem;
+  color: #FDFAF2;
+  transition: all 0.2s ease;
+}
+.agri-input:focus {
+  border-color: #84CC16;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(132, 204, 22, 0.25);
+  background: rgba(22, 34, 18, 0.95);
+}
+.agri-input::placeholder {
+  color: #6B7C63;
+}
+
+.agri-btn-primary {
+  background: linear-gradient(135deg, #65A30D 0%, #4D7C0F 100%);
+  color: #FFFFFF;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(101, 163, 13, 0.35);
+  border: 1px solid rgba(190, 242, 100, 0.3);
+  transition: all 0.2s ease;
+}
+.agri-btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #84CC16 0%, #65A30D 100%);
+  box-shadow: 0 6px 22px rgba(132, 204, 22, 0.45);
+  transform: translateY(-1px);
+}
+.agri-btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Staggered entrance animations */
+@keyframes agri-fade-in-up {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.agri-animate-fade-in {
+  animation: agri-fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.agri-stagger-1 { animation-delay: 0.05s; }
+.agri-stagger-2 { animation-delay: 0.12s; }
+.agri-stagger-3 { animation-delay: 0.2s; }
+.agri-stagger-4 { animation-delay: 0.28s; }
+
+/* Pulse Marker Keyframes */
+@keyframes pulse-sensor {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(132, 204, 22, 0.7);
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 12px rgba(132, 204, 22, 0);
+  }
+}
+
+.sensor-marker-pulse {
+  animation: pulse-sensor 2.2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+@keyframes boundary-dash {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+.animated-field-boundary {
+  stroke-dasharray: 6 6;
+  animation: boundary-dash 3s linear infinite;
+}
+
+/* Slow rotate for radar compass */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 20s linear infinite;
+}
+
+/* Shimmer Loading State */
+@keyframes agri-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.agri-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(22, 34, 18, 0.4) 0%,
+    rgba(34, 52, 28, 0.8) 50%,
+    rgba(22, 34, 18, 0.4) 100%
+  );
+  background-size: 200% 100%;
+  animation: agri-shimmer 1.8s infinite ease-in-out;
+}
+
+/* React-Bits & Cyber-Agricultural Animations */
+@keyframes laser-sweep {
+  0% {
+    top: 2%;
+    opacity: 0.85;
+  }
+  50% {
+    top: 96%;
+    opacity: 1;
+  }
+  100% {
+    top: 2%;
+    opacity: 0.85;
+  }
+}
+
+.laser-scanner-beam {
+  animation: laser-sweep 2.6s ease-in-out infinite;
+}
+
+@keyframes text-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.shiny-text {
+  background: linear-gradient(
+    90deg,
+    #84CC16 0%,
+    #FDFAF2 40%,
+    #38BDF8 65%,
+    #84CC16 100%
+  );
+  background-size: 200% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: text-shimmer 4s linear infinite;
+}
+
+@keyframes float-slow {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.animate-float {
+  animation: float-slow 4s ease-in-out infinite;
+}
+
+@keyframes radar-sweep {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.radar-sweep-beam {
+  transform-origin: center center;
+  animation: radar-sweep 3.5s linear infinite;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.25;
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0.85;
+  }
+}
+
+.pulse-ring-glow {
+  animation: pulse-ring 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Prefer Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .sensor-marker-pulse,
+  .animated-field-boundary,
+  .animate-spin-slow,
+  .agri-shimmer,
+  .agri-animate-fade-in {
+    animation: none !important;
+  }
+}
+
+/* Print Rules */
 @media print {
   aside,
   nav,
@@ -35,26 +333,8 @@ input[type="number"]::-webkit-inner-spin-button {
   .sm\:hidden {
     display: none !important;
   }
-
-  .sm\:ml-\[230px\] {
-    margin-left: 0 !important;
-  }
-
   body, html, #root {
     background: #ffffff !important;
     color: #1a1a1a !important;
-  }
-
-  main {
-    padding: 12px !important;
-  }
-
-  .lg\:grid-cols-2 {
-    grid-template-columns: 1fr !important;
-  }
-
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
   }
 }

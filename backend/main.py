@@ -1,3 +1,9 @@
+import sys
+from pathlib import Path
+backend_dir = str(Path(__file__).resolve().parent)
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+
 from fastapi import Depends, FastAPI, HTTPException, Header, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -14,20 +20,25 @@ import auth_service
 import assistant_service
 import mandi_service
 import disease_service
+import adaptive_service
 from soil_data import AGRO_CLIMATIC_ZONES, DISTRICT_TO_ZONE, MAHARASHTRA_CITIES
 
 app = FastAPI(
     title="AgriSense AI API",
-    description="Intelligent Agricultural Decision Support System",
-    version="1.0.0"
+    description="Intelligent Agricultural Decision Support System with Adaptive Intelligence",
+    version="1.1.0"
 )
 
 auth_service.init_db()
 
+# Flexible CORS supporting local development, Vercel/Netlify preview/production domains, and wildcard
+cors_env = os.getenv("ALLOWED_ORIGINS", "")
+allowed_origins = [o.strip() for o in cors_env.split(",") if o.strip()] if cors_env else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
-    allow_credentials=True,
+    allow_origins=allowed_origins if allowed_origins != ["*"] else ["*"],
+    allow_credentials=True if allowed_origins != ["*"] else False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -576,6 +587,15 @@ def yield_crops():
     return {"crops": yield_service.CROP_TYPES}
 
 
+@app.get("/yield-seasonal-estimate")
+def yield_seasonal_estimate(lat: float, lon: float, crop: str):
+    """Estimate seasonal rainfall and temperature over growing cycle for yield modeling."""
+    try:
+        return yield_service.get_seasonal_climate_estimate(lat, lon, crop)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to calculate seasonal estimate: {str(e)}")
+
+
 @app.get("/nearby-shops")
 def nearby_shops(lat: float, lon: float, radius_km: float = 15.0):
     """Return nearby agrarian/farm shops using OpenStreetMap Overpass API."""
@@ -674,11 +694,12 @@ def farm_report(current_user: dict = Depends(get_current_user)):
 
 class AssistantInput(BaseModel):
     message: str
+    history: list[dict] = []
 
 
 @app.post("/assistant/query")
 def assistant_query(data: AssistantInput):
-    return assistant_service.get_response(data.message)
+    return assistant_service.get_response(data.message, data.history)
 
 
 # ── PUT /me — update profile ────────────────────────────────────
@@ -795,5 +816,96 @@ async def predict_disease_endpoint(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Diagnostic processing failed: {str(e)}")
+
+
+# ═════════════════════════════════════════════════════════════════
+# ── ADAPTIVE AGRICULTURE INTELLIGENCE & ADAPTION PLATFORM APIs ──
+# ═════════════════════════════════════════════════════════════════
+
+class FarmerFeedbackInput(BaseModel):
+    query: str
+    response: str
+    helpful: bool
+    correction: Optional[str] = None
+    crop: Optional[str] = "General"
+    language: Optional[str] = "mr"
+    farmer_name: Optional[str] = "Anonymous"
+
+class FeedbackVerificationInput(BaseModel):
+    feedback_id: str
+    approve: bool
+    reviewer: Optional[str] = "Agronomist Reviewer"
+
+@app.get("/adaptive/stats")
+def get_adaptive_stats():
+    """Returns dataset metrics, language coverage, and Adaption platform status."""
+    return adaptive_service.get_dataset_stats()
+
+@app.get("/adaptive/records")
+def get_adaptive_records(language: Optional[str] = None, topic: Optional[str] = None):
+    """Retrieve verified agricultural knowledge records."""
+    records = adaptive_service.get_dataset_records()
+    if language:
+        records = [r for r in records if r.get("language") == language]
+    if topic:
+        records = [r for r in records if r.get("topic") == topic]
+    return {"total": len(records), "records": records}
+
+@app.post("/adaptive/upload")
+def upload_dataset_to_adaption():
+    """Upload verified dataset to Adaption platform via official SDK."""
+    return adaptive_service.upload_to_adaption()
+
+@app.post("/adaptive/run")
+def run_adaptation_job(job_spec: Optional[dict] = None):
+    """Trigger data adaptation/optimization run on Adaption platform."""
+    return adaptive_service.run_adaptation(job_spec=job_spec)
+
+@app.get("/adaptive/evaluate")
+def evaluate_adaptive_dataset():
+    """Run measurable domain-grounding and agronomic safety evaluations."""
+    return adaptive_service.evaluate_dataset()
+
+@app.post("/adaptive/feedback")
+def submit_farmer_feedback(data: FarmerFeedbackInput):
+    """Collect real farmer rating, corrections, and observations."""
+    return adaptive_service.record_farmer_feedback(
+        query=data.query,
+        response=data.response,
+        helpful=data.helpful,
+        correction=data.correction,
+        crop=data.crop,
+        language=data.language,
+        farmer_name=data.farmer_name
+    )
+
+@app.get("/adaptive/feedback")
+def list_farmer_feedback():
+    """List farmer feedback in review queue."""
+    feedbacks = adaptive_service.get_feedback_records()
+    return {"total": len(feedbacks), "feedback": feedbacks}
+
+@app.post("/adaptive/verify-feedback")
+def verify_feedback_endpoint(data: FeedbackVerificationInput):
+    """Human-in-the-loop verification before feedback enters trusted dataset."""
+    return adaptive_service.verify_feedback(
+        feedback_id=data.feedback_id,
+        approve=data.approve,
+        reviewer=data.reviewer or "Agronomist Reviewer"
+    )
+
+@app.get("/adaptive/export")
+def export_adaptive_dataset(format: str = "jsonl"):
+    """Export dataset in JSONL or CSV for Hugging Face / Kaggle publication."""
+    records = adaptive_service.get_dataset_records()
+    return {
+        "dataset_name": "AgriSense-Adaptive-KB-Maharashtra",
+        "format": format,
+        "count": len(records),
+        "data": records,
+        "adaption_acknowledgement": "Adapted & Curated using Adaption Adaptive Data Platform",
+        "license": "CC-BY-4.0"
+    }
+
 
 

@@ -1,511 +1,650 @@
-  import LoadingSpinner from '../components/LoadingSpinner';
+import { useState, useEffect, useRef } from 'react';
+import LoadingSpinner from '../components/LoadingSpinner';
 import Toast from '../components/Toast';
-import { FlaskConical, Thermometer, CloudRain, Sprout, MapPin, Navigation, Printer } from 'lucide-react';
+import SpotlightCard from '../components/SpotlightCard';
+import AnimatedCounter from '../components/AnimatedCounter';
+import ShinyText from '../components/ShinyText';
+import { FlaskConical, Thermometer, CloudRain, Sprout, Printer, Share2 } from 'lucide-react';
+
 import { useAuth } from '../context/AuthContext';
+
 import { useFarmLocation } from '../context/LocationContext';
 
 
 
 
-const API_BASE = 'http://127.0.0.1:8000';
+
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
 const numericRules = {
+
   nitrogen: { min: 0, max: 200 },
+
   phosphorus: { min: 0, max: 200 },
+
   potassium: { min: 0, max: 250 },
+
   ph: { min: 0, max: 14 },
+
   rainfall: { min: 0, max: 5000 },
+
   temperature: { min: -5, max: 55 },
+
 };
 
+
+
 function getError(name, value) {
+
   if (value === '' || value === null) return null;
+
   const num = parseFloat(value);
+
   if (isNaN(num)) return 'Enter a valid number';
+
   const rule = numericRules[name];
+
   if (!rule) return null;
+
   if (num < rule.min || num > rule.max) return `Must be between ${rule.min} and ${rule.max}`;
+
   return null;
+
 }
 
+
+
 function FertilizerTreatment() {
+
   const { token } = useAuth();
 
+
+
   const [options, setOptions] = useState({ soil_types: [], crop_types: [] });
+
   const [form, setForm] = useState({
+
     nitrogen: '', phosphorus: '', potassium: '', ph: '', rainfall: '', temperature: '',
+
     soil_color: '', crop: '',
+
   });
 
-  const [query, setQuery] = useState('');
-  const [suggestions, setSuggestions] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+
+
   const [shops, setShops] = useState([]);
+
   const [shopsStatus, setShopsStatus] = useState(null);
+
   const [shopsLoading, setShopsLoading] = useState(false);
+
   const [shopsError, setShopsError] = useState('');
-  const debounceRef = useRef(null);
+
+
 
   const [result, setResult] = useState(null);
 
+
+
   // Resolve location and store coordinates
+
 // resolveLocation is now handled via useFarmLocation context
 
+
+
 // Use location from shared context
-  const { savedLocation, saveLocation, loadingLocation, error: locError, refreshLocation } = useFarmLocation();
 
-  // Update form fields when savedLocation changes
+  const { savedLocation } = useFarmLocation();
+  const shopsReqRef = useRef(0);
+  const autoFilledRef = useRef({});
+
+
+
+  // Autofill only values returned for the currently selected location.
+  const num = (value) =>
+    value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))
+      ? Number(value)
+      : null;
+
   useEffect(() => {
-    if (savedLocation) {
-      setForm((prev) => ({
-        ...prev,
-        temperature: savedLocation.weather?.temperature ?? '',
-        rainfall: savedLocation.weather?.rainfall ?? '',
-        ...(savedLocation.zone ? {
-          nitrogen: savedLocation.zone.N,
-          phosphorus: savedLocation.zone.P,
-          potassium: savedLocation.zone.K,
-          ph: savedLocation.zone.ph,
-        } : {}),
-      }));
-    }
-  }, [savedLocation]);
+    const weather = savedLocation?.weather;
+    const zone = savedLocation?.zone;
+    const values = {
+      temperature: num(weather?.temperature),
+      rainfall: num(weather?.rainfall),
+      nitrogen: num(zone?.N),
+      phosphorus: num(zone?.P),
+      potassium: num(zone?.K),
+      ph: num(zone?.ph),
+    };
+    setForm((previous) => {
+      const next = { ...previous };
+      Object.entries(values).forEach(([key, value]) => {
+        if (value === null) return;
+        const current = previous[key];
+        const wasAutoFilled = Object.prototype.hasOwnProperty.call(autoFilledRef.current, key)
+          && String(current) === String(autoFilledRef.current[key]);
+        if (current === '' || current === null || current === undefined || wasAutoFilled) {
+          next[key] = value;
+          autoFilledRef.current[key] = value;
+        }
+      });
+      return next;
+    });
+  }, [savedLocation?.weather, savedLocation?.zone]);
 
-  const useMyLocation = () => {
-    // Centralized location refresh from context
-    refreshLocation();
-  };
+  const locationKey = `${savedLocation?.lat}_${savedLocation?.lon}`;
+  const [prevLocationKey, setPrevLocationKey] = useState(locationKey);
+  if (prevLocationKey !== locationKey) {
+    setPrevLocationKey(locationKey);
+    setShops([]);
+    setShopsStatus(null);
+    setShopsError('');
+    setShopsLoading(false);
+  }
 
-  const selectSuggestion = (s) => {
-    setQuery(s.name);
-    setShowSuggestions(false);
-    saveLocation({ lat: s.lat, lon: s.lon, name: s.name, district: s.district });
-  };
-
-  // Fetch nearby shops using saved location coordinates
   const fetchNearbyShops = async () => {
-    const { lat, lon } = savedLocation || {};
-    if (!lat || !lon) return;
+    const lat = Number(savedLocation?.lat);
+    const lon = Number(savedLocation?.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      setShopsError('Please select or detect your location first.');
+      return;
+    }
+    const requestId = ++shopsReqRef.current;
     setShopsLoading(true);
     setShopsError('');
     setShopsStatus(null);
     try {
-      const res = await fetch(`${API_BASE}/nearby-shops?lat=${lat}&lon=${lon}`);
-      const data = await res.json();
-      if (!res.ok) {
-        const msg = data.detail || data.message || 'Failed to get shops';
-        throw new Error(msg);
-      }
-      setShops(data.shops || []);
+      const response = await fetch(`${API_BASE}/nearby-shops?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || data.message || 'Failed to get nearby shops.');
+      if (requestId !== shopsReqRef.current) return;
+      setShops(Array.isArray(data.shops) ? data.shops : []);
       setShopsStatus(data.status || 'success');
-    } catch (e) {
-      setShopsError(e.message);
+    } catch (err) {
+      if (requestId !== shopsReqRef.current) return;
+      setShopsError(err?.message || 'Could not load nearby shops.');
+      setShops([]);
     } finally {
-      setShopsLoading(false);
+      if (requestId === shopsReqRef.current) setShopsLoading(false);
     }
   };
+
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState(null); // {msg, type}
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+
+
 
   const showToast = (msg, type = 'success') => {
+
     setToast({ msg, type });
+
   };
+
+
 
   const handleToastClose = () => setToast(null);
 
+
+
   useEffect(() => {
+
     fetch(`${API_BASE}/fertilizer-options`)
+
       .then((r) => r.json())
+
       .then(setOptions)
+
       .catch(() => {});
+
   }, []);
 
-  useEffect(() => {
-    if (query.trim().length < 1) {
-      setSuggestions([]);
-      return;
-    }
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const res = await fetch(`${API_BASE}/city-search?query=${encodeURIComponent(query)}`);
-        const data = await res.json();
-        setSuggestions(data.results || []);
-      } catch {
-        setSuggestions([]);
-      }
-    }, 400);
-  }, [query]);
 
-
-
-// Duplicate selectSuggestion removed - using the earlier definition that saves location
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
+
+
   const climateFields = [
+
     { name: 'temperature', label: 'Temperature', unit: '°C', icon: Thermometer },
+
     { name: 'rainfall', label: 'Rainfall', unit: 'mm/yr', icon: CloudRain },
+
   ];
+
   const npkFields = [
+
     { name: 'nitrogen', label: 'Nitrogen' },
+
     { name: 'phosphorus', label: 'Phosphorus' },
+
     { name: 'potassium', label: 'Potassium' },
+
     { name: 'ph', label: 'Soil pH' },
+
   ];
+
+
 
   const allFilled =
+
     climateFields.every((f) => form[f.name] !== '') &&
+
     npkFields.every((f) => form[f.name] !== '') &&
+
     form.soil_color !== '' && form.crop !== '';
+
   const hasErrors = Object.keys(numericRules).some((key) => getError(key, form[key]));
 
+
+
   const handleSubmit = async () => {
+
     setLoading(true);
+
     setError('');
+
     setResult(null);
+
     try {
+
       const payload = {
+
         nitrogen: parseFloat(form.nitrogen),
+
         phosphorus: parseFloat(form.phosphorus),
+
         potassium: parseFloat(form.potassium),
+
         ph: parseFloat(form.ph),
+
         rainfall: parseFloat(form.rainfall),
+
         temperature: parseFloat(form.temperature),
+
         soil_color: form.soil_color,
+
         crop: form.crop,
+
       };
+
       const res = await fetch(`${API_BASE}/predict/fertilizer`, {
+
         method: 'POST',
+
         headers: {
+
           'Content-Type': 'application/json',
+
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
+
         },
+
         body: JSON.stringify(payload),
+
       });
+
       const data = await res.json();
+
       if (!res.ok) {
+
         const msg = Array.isArray(data.detail)
+
           ? data.detail.map((d) => d.msg).join(', ')
+
           : data.detail || 'Prediction failed';
+
         throw new Error(msg);
+
       }
+
       setResult(data.suggestions);
+
       setNote(data.note || '');
+
     } catch (err) {
+
       setError(err.message || 'Could not get a recommendation.');
+
     } finally {
+
       setLoading(false);
+
     }
+
   };
+
+
 
   const rankLabels = ['Best Match', '2nd Option', '3rd Option'];
 
-  return (
-    <div className={`w-full max-w-2xl mx-auto ${mounted ? 'opacity-100 transition-opacity duration-500' : 'opacity-0'}`}>
-      <h2 className="font-serif text-[26px] font-medium text-[#22301A] mb-1">
-        Fertilizer Recommendation
-      </h2>
-      <p className="text-[#7A8A6A] text-sm mb-7">
-        Get the right fertilizer for your crop and soil conditions.
-      </p>
 
-      <div className="bg-white rounded-2xl p-6 shadow-[0_1px_3px_rgba(34,48,26,0.06),0_8px_24px_rgba(34,48,26,0.05)] space-y-7">
+
+  return (
+    <div className="w-full max-w-2xl mx-auto space-y-6 pb-12 agri-animate-fade-in">
+      {/* Header Banner */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#0C150A] via-[#142311] to-[#1E3319] text-white p-6 sm:p-7 shadow-[0_12px_36px_rgba(0,0,0,0.5)] border border-white/10">
+        <div className="relative z-10">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-[#84CC16]/20 text-[#BEF264] border border-[#84CC16]/30 mb-2">
+            <FlaskConical size={13} />
+            <ShinyText text="Nutrient Optimization & N-P-K Balance" speed={4} className="text-[11px] font-semibold" />
+          </div>
+          <h2 className="font-serif text-2xl sm:text-3xl font-semibold text-[#FDFAF2]">
+            Precision Fertilizer Recommendation
+          </h2>
+          <p className="text-xs sm:text-sm text-[#A3B39C] mt-1">
+            Determine balanced mineral application rates tailored to crop nutritional stages, soil color, and microclimate.
+          </p>
+        </div>
+      </div>
+
+      <div className="agri-glass-card p-6 sm:p-8 space-y-7">
         {/* --- FORM INPUTS (Hidden during print) --- */}
         <div className="space-y-7 no-print">
-          {/* --- LOCATION --- */}
+          {/* --- CROP & SOIL COLOR --- */}
           <div>
-            <h3 className="text-[13px] font-semibold text-[#22301A] uppercase tracking-wide mb-3.5">
-            Your Location
-          </h3>
-          <div className="flex flex-col sm:flex-row gap-2.5">
-            <div className="relative flex-1">
-              <MapPin size={17} strokeWidth={1.8} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B0AA98]" />
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => { setQuery(e.target.value); setShowSuggestions(true); }}
-                onFocus={() => setShowSuggestions(true)}
-                placeholder="Type your city or district..."
-                className="w-full bg-[#F6F4EC] border border-transparent rounded-xl pl-11 pr-4 py-3 text-sm text-[#22301A] placeholder:text-[#A8A391] focus:outline-none focus:border-[#5B7A3A] focus:bg-white transition"
-              />
-              {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute z-10 w-full bg-white rounded-xl mt-1.5 shadow-lg border border-[#F0EEE4] max-h-48 overflow-y-auto">
-                  {suggestions.map((s, i) => (
-                    <button
-                      type="button" key={i}
-                      onClick={() => selectSuggestion(s)}
-                      className="w-full text-left px-4 py-2.5 text-sm hover:bg-[#F6F4EC] first:rounded-t-xl last:rounded-b-xl transition"
-                    >
-                      <span className="text-[#22301A]">{s.name}</span>{' '}
-                      <span className="text-[#B0AA98] text-xs">({s.district})</span>
-                    </button>
+            <h3 className="text-xs font-semibold text-[#84CC16] uppercase tracking-wider mb-3">
+              Crop &amp; Soil Color
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-[#8E9B85] block mb-1.5">Crop</label>
+                <select
+                  name="crop"
+                  value={form.crop}
+                  onChange={handleChange}
+                  className="w-full bg-[#10190D] border border-white/10 rounded-xl px-4 py-3 text-sm text-[#FDFAF2] focus:outline-none focus:ring-2 focus:ring-[#84CC16]"
+                >
+                  <option value="" className="bg-[#10190D]">Select crop</option>
+                  {options.crop_types.map((c) => (
+                    <option key={c} value={c} className="bg-[#10190D]">{c}</option>
                   ))}
-                </div>
-              )}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs text-[#8E9B85] block mb-1.5">Soil color</label>
+                <select
+                  name="soil_color"
+                  value={form.soil_color}
+                  onChange={handleChange}
+                  className="w-full bg-[#10190D] border border-white/10 rounded-xl px-4 py-3 text-sm text-[#FDFAF2] focus:outline-none focus:ring-2 focus:ring-[#84CC16]"
+                >
+                  <option value="" className="bg-[#10190D]">Select soil color</option>
+                  {options.soil_types.map((s) => (
+                    <option key={s} value={s} className="bg-[#10190D]">{s}</option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <button
-              type="button" onClick={useMyLocation} disabled={loadingLocation}
-              className="flex items-center justify-center gap-2 bg-[#22301A] text-white text-sm font-medium px-5 py-3 rounded-xl hover:bg-[#334423] transition disabled:opacity-50 whitespace-nowrap shadow-sm"
-            >
-              <Navigation size={15} strokeWidth={2} />
-              {loadingLocation ? 'Locating...' : 'Use My Location'}
-            </button>
           </div>
-          {locError && <p className="text-red-500 text-xs mt-2.5">{locError}</p>}
-          {savedLocation && (
-            <p className="mt-2.5 text-xs text-[#7A8A6A]">
-              📍 <strong className="text-[#22301A]">{savedLocation.name}</strong> — climate and soil nutrients auto-filled below.
+
+          <div className="h-px bg-white/10" />
+
+          {/* --- CLIMATE --- */}
+          <div>
+            <h3 className="text-xs font-semibold text-[#84CC16] uppercase tracking-wider mb-3">
+              Climate Parameters
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              {climateFields.map((f) => {
+                const fieldError = getError(f.name, form[f.name]);
+                return (
+                  <div
+                    key={f.name}
+                    className={`rounded-2xl p-4 border transition ${
+                      fieldError ? 'bg-red-950/40 border-red-500/50' : 'bg-[#0B1309]/80 border-white/10 hover:border-white/20'
+                    }`}
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center mb-2 border border-white/10 text-[#F59E0B]">
+                      <f.icon size={14} strokeWidth={1.8} />
+                    </div>
+                    <label className="text-[10px] text-[#8E9B85] block leading-tight mb-1">{f.label}</label>
+                    <div className="flex items-baseline gap-1">
+                      <input
+                        type="number"
+                        step="any"
+                        name={f.name}
+                        value={form[f.name]}
+                        onChange={handleChange}
+                        className="w-full bg-transparent text-base font-serif font-bold text-[#FDFAF2] focus:outline-none min-w-0"
+                      />
+                      <span className="text-[10px] text-[#6B7C63] shrink-0 font-medium">{f.unit}</span>
+                    </div>
+                    {fieldError && <p className="text-[10px] text-red-400 mt-1">{fieldError}</p>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="h-px bg-white/10" />
+
+          {/* --- SOIL NUTRIENTS --- */}
+          <div>
+            <h3 className="text-xs font-semibold text-[#84CC16] uppercase tracking-wider mb-1">
+              Soil Nutrients (N-P-K &amp; pH)
+            </h3>
+            <p className="text-xs text-[#8E9B85] mb-3.5">
+              Auto-filled from your agro-climatic zone. Edit if you have your Soil Health Card readings.
             </p>
-          )}
-        </div>
-
-        <div className="h-px bg-[#EEEBDD]"></div>
-
-        {/* --- CROP & SOIL COLOR --- */}
-        <div>
-          <h3 className="text-[13px] font-semibold text-[#22301A] uppercase tracking-wide mb-3.5">
-            Crop &amp; Soil Color
-          </h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-[#7A8A6A] block mb-1.5">Crop</label>
-              <select
-                name="crop" value={form.crop} onChange={handleChange}
-                className="w-full bg-[#F6F4EC] border border-transparent rounded-xl px-4 py-3 text-sm text-[#22301A] focus:outline-none focus:border-[#5B7A3A] focus:bg-white transition"
-              >
-                <option value="">Select crop</option>
-                {options.crop_types.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-[#7A8A6A] block mb-1.5">Soil color</label>
-              <select
-                name="soil_color" value={form.soil_color} onChange={handleChange}
-                className="w-full bg-[#F6F4EC] border border-transparent rounded-xl px-4 py-3 text-sm text-[#22301A] focus:outline-none focus:border-[#5B7A3A] focus:bg-white transition"
-              >
-                <option value="">Select soil color</option>
-                {options.soil_types.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div className="h-px bg-[#EEEBDD]"></div>
-
-        {/* --- CLIMATE --- */}
-        <div>
-          <h3 className="text-[13px] font-semibold text-[#22301A] uppercase tracking-wide mb-3.5">
-            Climate
-          </h3>
-          <div className="grid grid-cols-2 gap-3">
-            {climateFields.map((f) => {
-              const fieldError = getError(f.name, form[f.name]);
-              return (
-                <div key={f.name} className={`rounded-xl p-3.5 shadow-[0_1px_2px_rgba(176,143,82,0.08)] ${fieldError ? 'bg-red-50 ring-1 ring-red-300' : 'bg-[#FBF3E3]'}`}>
-                  <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center mb-2 shadow-sm">
-                    <f.icon size={14} strokeWidth={1.8} className={fieldError ? 'text-red-400' : 'text-[#B08F52]'} />
-                  </div>
-                  <label className="text-[10px] text-[#A8895A] block leading-tight mb-0.5">{f.label}</label>
-                  <div className="flex items-baseline gap-1">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {npkFields.map((f) => {
+                const fieldError = getError(f.name, form[f.name]);
+                return (
+                  <div
+                    key={f.name}
+                    className={`rounded-2xl p-4 border transition ${
+                      fieldError ? 'bg-red-950/40 border-red-500/50' : 'bg-[#0B1309]/80 border-white/10 hover:border-white/20'
+                    }`}
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center mb-2 border border-white/10 text-[#84CC16]">
+                      <Sprout size={14} strokeWidth={1.8} />
+                    </div>
+                    <label className="text-[10px] text-[#8E9B85] block leading-tight mb-1">{f.label}</label>
                     <input
-                      type="number" step="any" name={f.name} value={form[f.name]} onChange={handleChange}
-                      className="w-full bg-transparent text-[16px] font-medium text-[#3D2E14] focus:outline-none leading-tight min-w-0"
+                      type="number"
+                      step="any"
+                      name={f.name}
+                      value={form[f.name]}
+                      onChange={handleChange}
+                      className="w-full bg-transparent text-base font-serif font-bold text-[#FDFAF2] focus:outline-none"
                     />
-                    <span className="text-[10px] text-[#C4A876] shrink-0">{f.unit}</span>
+                    {fieldError && <p className="text-[10px] text-red-400 mt-1">{fieldError}</p>}
                   </div>
-                  {fieldError && <p className="text-[10px] text-red-500 mt-1">{fieldError}</p>}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
+
+          <button
+            onClick={handleSubmit}
+            disabled={!allFilled || loading || hasErrors}
+            className="w-full agri-btn-primary py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
+          >
+            {loading ? 'Analyzing Soil Chemistry...' : 'Recommend Fertilizer'}
+          </button>
+
+          {error && <p className="text-red-400 text-sm">{error}</p>}
         </div>
 
-        <div className="h-px bg-[#EEEBDD]"></div>
 
-        {/* --- SOIL NUTRIENTS --- */}
-        <div>
-          <h3 className="text-[13px] font-semibold text-[#22301A] uppercase tracking-wide mb-1">Soil Nutrients</h3>
-          <p className="text-xs text-[#7A8A6A] mb-3.5">
-            Auto-filled from your zone. Edit if you have your own Soil Health Card readings.
-          </p>
-          <div className="grid grid-cols-4 gap-3">
-            {npkFields.map((f) => {
-              const fieldError = getError(f.name, form[f.name]);
-              return (
-                <div key={f.name} className={`rounded-xl p-3.5 shadow-[0_1px_2px_rgba(91,122,58,0.08)] ${fieldError ? 'bg-red-50 ring-1 ring-red-300' : 'bg-[#E5EFD5]'}`}>
-                  <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center mb-2 shadow-sm">
-                    <Sprout size={14} strokeWidth={1.8} className={fieldError ? 'text-red-400' : 'text-[#5B7A3A]'} />
-                  </div>
-                  <label className="text-[10px] text-[#5B7A3A] block leading-tight mb-0.5">{f.label}</label>
-                  <input
-                    type="number" step="any" name={f.name} value={form[f.name]} onChange={handleChange}
-                    className="w-full bg-transparent text-[16px] font-medium text-[#22301A] focus:outline-none leading-tight"
-                  />
-                  {fieldError && <p className="text-[10px] text-red-500 mt-1">{fieldError}</p>}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <button
-          onClick={handleSubmit} disabled={!allFilled || loading || hasErrors}
-          className="w-full bg-[#5B7A3A] text-white text-sm font-medium px-4 py-3.5 rounded-xl hover:bg-[#4C6B4C] transition disabled:opacity-40 shadow-[0_4px_12px_rgba(91,122,58,0.25)]"
-        >
-          {loading ? 'Analyzing...' : 'Recommend Fertilizer'}
-        </button>
-
-        {error && <p className="text-red-500 text-sm">{error}</p>}
-        </div>
 
         {result && (
-          <div className="pt-1">
-            <h3 className="text-[13px] font-semibold text-[#22301A] uppercase tracking-wide mb-3.5">
-              Recommendations
+          <div className="pt-2 space-y-4 agri-animate-fade-in">
+            <h3 className="text-xs font-semibold text-[#84CC16] uppercase tracking-wider mb-2">
+              Optimal Fertilizer Formulations
             </h3>
-            <div className="space-y-2.5">
+
+            <div className="space-y-3">
               {result.map((r, i) => (
-                <div
+                <SpotlightCard
                   key={r.fertilizer}
-                  className={i === 0
-                    ? 'rounded-xl px-5 py-4 bg-[#22301A] text-white shadow-[0_4px_16px_rgba(34,48,26,0.18)]'
-                    : 'rounded-xl px-5 py-4 bg-[#F6F4EC] text-[#22301A]'}
+                  spotlightColor={i === 0 ? "rgba(132, 204, 22, 0.22)" : "rgba(132, 204, 22, 0.12)"}
+                  borderColor={i === 0 ? "rgba(132, 204, 22, 0.5)" : "rgba(255, 255, 255, 0.15)"}
+                  className={`rounded-2xl p-5 border transition ${
+                    i === 0
+                      ? 'bg-gradient-to-r from-[#142311] to-[#1C3218] border-[#84CC16]/40 text-white shadow-lg'
+                      : 'bg-[#0B1309]/80 border-white/10 text-[#FDFAF2]'
+                  }`}
                 >
                   <div className="flex justify-between items-start gap-3">
                     <div>
-                      <div className={`text-[11px] font-medium ${i === 0 ? 'text-[#B8D08A]' : 'text-[#8A8A6A]'}`}>
+                      <div className={`text-[10px] font-bold uppercase tracking-wider ${i === 0 ? 'text-[#84CC16]' : 'text-[#8E9B85]'}`}>
                         {rankLabels[i]}
                       </div>
-                      <div className="text-lg font-semibold mt-0.5">{r.fertilizer}</div>
-                      <div className={`text-xs mt-1 ${i === 0 ? 'text-[#DCE8C8]' : 'text-[#7A8A6A]'}`}>
+                      <div className="text-lg font-serif font-bold mt-0.5 text-[#FDFAF2]">{r.fertilizer}</div>
+                      <div className="text-xs mt-1 text-[#A3B39C] leading-relaxed">
                         {r.description}
                       </div>
                       {r.price_estimate && (
-                        <div className={`text-[11px] mt-2 font-medium flex items-center gap-1 ${i === 0 ? 'text-[#B8D08A]' : 'text-[#5B7A3A]'}`}>
+                        <div className={`text-[11px] mt-2 font-medium flex items-center gap-1 ${i === 0 ? 'text-[#BEF264]' : 'text-[#84CC16]'}`}>
                           <span>{r.price_estimate}</span>
-                          <span className={i === 0 ? 'text-[#A3B87A] font-normal' : 'text-[#8A8A6A] font-normal'}>
-                            (approx — confirm with your dealer)
-                          </span>
+                          <span className="text-[#8E9B85] font-normal">(approximate price)</span>
                         </div>
                       )}
                     </div>
-                    <div className={`text-xl font-serif shrink-0 ${i === 0 ? 'text-white' : 'text-[#5B7A3A]'}`}>
-                      {Math.round(r.confidence * 100)}%
+                    <div className={`text-2xl font-serif font-bold shrink-0 ${i === 0 ? 'text-[#84CC16]' : 'text-[#BEF264]'}`}>
+                      <AnimatedCounter value={Math.round(r.confidence * 100)} suffix="%" duration={1000} />
                     </div>
                   </div>
-                </div>
+                </SpotlightCard>
               ))}
             </div>
-            {note && <p className="text-[11px] text-[#A8A391] mt-3">{note}</p>}
 
-{/* Find nearby shops button, WhatsApp Share, & Print / Save */}
-<div className="mt-4 flex flex-wrap gap-3 no-print">
-  <button
-    type="button"
-    onClick={() => window.print()}
-    className="inline-flex items-center justify-center gap-2 bg-[#22301A] text-white rounded-xl px-5 py-3 hover:bg-[#334423] transition-colors text-sm font-medium w-full sm:w-auto"
-  >
-    <Printer size={16} />
-    Print / Save
-  </button>
+            {note && <p className="text-[11px] text-[#8E9B85] mt-3 leading-relaxed">{note}</p>}
 
-  <button
-    onClick={fetchNearbyShops}
-    disabled={shopsLoading || !coords.lat}
-    className="bg-[#5B7A3A] text-white rounded-xl px-5 py-3 hover:bg-[#4C6B4C] disabled:opacity-50"
-  >
-    {shopsLoading ? 'Searching...' : 'Find nearby shops'}
-  </button>
 
-  <a
-    href={`https://wa.me/?text=${encodeURIComponent(
-      `AgriSense AI recommends ${result[0].fertilizer} (${Math.round(result[0].confidence * 100)}%) for my farm${query ? ' in ' + query : ''}.`
-    )}`}
-    target="_blank"
-    rel="noopener noreferrer"
-    className="inline-flex items-center justify-center gap-2 bg-[#25D366] text-white rounded-xl px-5 py-3 hover:bg-[#20bd5a] transition-colors text-sm font-medium w-full sm:w-auto"
-  >
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-    Share on WhatsApp
-  </a>
-</div>
 
-{/* Shops results */}
-{shopsLoading && (
-  <div className="bg-[#F6F4EC] rounded-xl p-3.5 mt-3 text-sm text-[#7A8A6A] animate-pulse">
-    Searching agricultural supply shops nearby...
-  </div>
-)}
+            {/* Action buttons */}
+            <div className="mt-4 flex flex-wrap gap-3 no-print">
+              <button
+                type="button"
+                onClick={() => {
+                  showToast('Preparing report for printing...');
+                  window.print();
+                }}
+                className="inline-flex items-center justify-center gap-2 bg-white/10 text-white rounded-xl px-5 py-3 hover:bg-white/20 transition-colors text-xs font-semibold border border-white/15 cursor-pointer w-full sm:w-auto"
+              >
+                <Printer size={15} />
+                <span>Print / Save</span>
+              </button>
 
-{!shopsLoading && shopsStatus === 'service_error' && (
-  <div className="bg-[#FBF3E3] border border-[#EFE7D8] rounded-xl p-3.5 mt-3">
-    <p className="text-sm text-[#7A6A3A]">
-      Map data service abhi busy hai, thodi der baad try karo ya neeche Google Maps use karo.
-    </p>
-  </div>
-)}
+              <button
+                onClick={fetchNearbyShops}
+                disabled={shopsLoading || !savedLocation?.lat}
+                className="agri-btn-primary rounded-xl px-5 py-3 text-xs font-semibold cursor-pointer disabled:opacity-50"
+              >
+                {shopsLoading ? 'Searching Supply Hubs...' : 'Find nearby shops'}
+              </button>
 
-{!shopsLoading && shopsStatus === 'no_results' && (
-  <div className="bg-[#FBF3E3] border border-[#EFE7D8] rounded-xl p-3.5 mt-3">
-    <p className="text-sm text-[#7A6A3A]">
-      Hamare map data mein is area ki dukaanein nahi mili — neeche Google Maps se nazdeeki dukaanein dekh sakte ho.
-    </p>
-  </div>
-)}
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(
+                  `AgriSense AI recommends ${result[0].fertilizer} (${Math.round(result[0].confidence * 100)}%) for my farm${savedLocation?.name ? ' in ' + savedLocation.name : ''}.`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 bg-[#25D366] text-white rounded-xl px-5 py-3 hover:bg-[#20bd5a] transition-colors text-xs font-semibold cursor-pointer w-full sm:w-auto"
+              >
+                <Share2 size={15} />
+                <span>Share on WhatsApp</span>
+              </a>
+            </div>
 
-{!shopsLoading && shops.length > 0 && (
-  <div className="space-y-3 mt-3">
-    {shops.map((shop, i) => (
-      <div key={i} className="bg-white rounded-2xl p-4 shadow-[0_1px_3px_rgba(34,48,26,0.06),0_8px_24px_rgba(34,48,26,0.05)] border border-[#EEEBDD]">
-        <h4 className="font-medium text-[#22301A]">{shop.name}</h4>
-        <p className="text-sm text-[#7A8A6A]">
-          {shop.distance_km.toFixed(1)} km{shop.address ? ` — ${shop.address}` : ''}
-          {shop.phone ? ` · 📞 ${shop.phone}` : ''}
-        </p>
-        <a
-          href={`https://www.google.com/maps/dir/?api=1&destination=${shop.lat},${shop.lon}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block mt-2 text-[#5B7A3A] underline text-sm font-medium"
-        >
-          Directions →
-        </a>
-      </div>
-    ))}
-  </div>
-)}
+            {/* Shops results */}
+            {shopsLoading && (
+              <div className="agri-glass-card p-4 mt-3 text-xs text-[#A8B5A0] flex items-center justify-center gap-3">
+                <LoadingSpinner size={20} />
+                <span>Searching agricultural supply shops nearby...</span>
+              </div>
+            )}
 
-{/* Permanent Google Maps search buttons */}
-{!shopsLoading && (shopsStatus || shops.length > 0) && coords.lat && (
-  <div className="mt-4 flex flex-wrap items-center gap-3 no-print">
-    <a
-      href={`https://www.google.com/maps/search/fertilizer+shop/@${coords.lat},${coords.lon},13z`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="bg-[#5B7A3A] text-white rounded-xl px-4 py-2.5 hover:bg-[#4C6B4C] text-sm font-medium transition"
-    >
-      Google Maps pe fertilizer shops dhoondo
-    </a>
-    <a
-      href={`https://www.google.com/maps/search/krushi+kendra/@${coords.lat},${coords.lon},13z`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="bg-[#F6F4EC] text-[#22301A] border border-[#EEEBDD] rounded-xl px-4 py-2.5 hover:bg-[#EFE7D8] text-sm font-medium transition"
-    >
-      Krushi Kendra dhoondo
-    </a>
-  </div>
-)}
+            {shopsError && (
+              <div className="bg-red-950/40 border border-red-500/40 rounded-xl p-3.5 mt-3 text-xs text-red-300">
+                {shopsError}
+              </div>
+            )}
+
+            {!shopsLoading && shopsStatus === 'service_error' && (
+              <div className="bg-[#1C160B]/70 border border-[#F59E0B]/30 rounded-xl p-3.5 mt-3 text-xs text-[#FDE68A]">
+                Map data service is busy right now. Please try again or use the Google Maps links below.
+              </div>
+            )}
+
+            {!shopsLoading && shopsStatus === 'no_results' && (
+              <div className="bg-[#1C160B]/70 border border-[#F59E0B]/30 rounded-xl p-3.5 mt-3 text-xs text-[#FDE68A]">
+                No agricultural dealers located within 15 km in local records. Use the Google Maps search below.
+              </div>
+            )}
+
+            {!shopsLoading && shops.length > 0 && (
+              <div className="space-y-3 mt-3">
+                {shops.map((shop, i) => (
+                  <div key={i} className="bg-[#0B1309]/80 rounded-2xl p-4 border border-white/10 hover:border-white/20 transition">
+                    <h4 className="font-bold text-[#FDFAF2] text-sm">{shop.name}</h4>
+                    <p className="text-xs text-[#8E9B85] mt-0.5">
+                      {shop.distance_km.toFixed(1)} km{shop.address ? ` — ${shop.address}` : ''}
+                      {shop.phone ? ` · 📞 ${shop.phone}` : ''}
+                    </p>
+                    <a
+                      href={`https://www.google.com/maps/dir/?api=1&destination=${shop.lat},${shop.lon}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block mt-2 text-[#84CC16] hover:underline text-xs font-semibold"
+                    >
+                      Directions →
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Permanent Google Maps search buttons */}
+            {!shopsLoading && (shopsStatus || shops.length > 0) && savedLocation?.lat && (
+              <div className="mt-4 flex flex-wrap items-center gap-3 no-print">
+                <a
+                  href={`https://www.google.com/maps/search/fertilizer+shop/@${savedLocation.lat},${savedLocation.lon},13z`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-[#142311] text-[#BEF264] border border-[#84CC16]/30 rounded-xl px-4 py-2.5 hover:bg-[#1E3319] text-xs font-semibold transition"
+                >
+                  Fertilizer Dealers (Google Maps)
+                </a>
+                <a
+                  href={`https://www.google.com/maps/search/krushi+kendra/@${savedLocation.lat},${savedLocation.lon},13z`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-[#10190D] text-[#FDFAF2] border border-white/10 rounded-xl px-4 py-2.5 hover:border-white/25 text-xs font-semibold transition"
+                >
+                  Krushi Kendra Hubs
+                </a>
+              </div>
+            )}
+
           </div>
+
         )}
+
       </div>
+
+      {toast && (
+        <Toast
+          message={toast.msg}
+          type={toast.type}
+          onClose={handleToastClose}
+        />
+      )}
+
     </div>
+
   );
+
 }
+
+
 
 export default FertilizerTreatment;

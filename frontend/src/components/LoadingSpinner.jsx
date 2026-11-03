@@ -1,10 +1,13 @@
 import React from 'react';
 
 export default function LoadingSpinner({ size = 40, color = 'text-[#5B7A3A]' }) {
+  const pixelSize = typeof size === 'number' ? `${size}px` : size;
+
   return (
     <div className={`flex items-center justify-center ${color}`}>
       <svg
-        className={`animate-spin h-${size} w-${size}`}
+        className="animate-spin"
+        style={{ width: pixelSize, height: pixelSize }}
         xmlns="http://www.w3.org/2000/svg"
         fill="none"
         viewBox="0 0 24 24"

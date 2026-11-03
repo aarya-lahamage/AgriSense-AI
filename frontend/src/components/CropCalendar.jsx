@@ -1,66 +1,60 @@
 import React, { useState, useEffect } from 'react';
+import SpotlightCard from './SpotlightCard';
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
 function CropCalendar({ crop }) {
   const [calendar, setCalendar] = useState(null);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!crop) {
-      setCalendar(null);
-      return;
-    }
+    if (!crop) return;
     let isMounted = true;
-    setLoading(true);
     fetch(`${API_BASE}/crop-calendar/${encodeURIComponent(crop)}`)
       .then((res) => res.json())
       .then((data) => {
-        if (isMounted) {
-          setCalendar(data);
-          setLoading(false);
-        }
+        if (isMounted) setCalendar(data);
       })
-      .catch(() => {
-        if (isMounted) setLoading(false);
-      });
+      .catch(() => {});
     return () => { isMounted = false; };
   }, [crop]);
 
-  if (!crop || loading) return null;
-  if (!calendar) return null;
+  if (!crop || !calendar) return null;
 
   return (
-    <div className="mt-5 bg-[#FBF3E3] rounded-xl p-5 border border-[#F0EEE4]">
-      <h4 className="text-[12px] font-semibold text-[#22301A] uppercase tracking-wide mb-4">
-        {crop} - Seasonal Calendar
+    <SpotlightCard
+      spotlightColor="rgba(132, 204, 22, 0.16)"
+      borderColor="rgba(132, 204, 22, 0.35)"
+      className="mt-5 bg-[#0B1309]/80 rounded-2xl p-5 border border-white/10"
+    >
+      <h4 className="text-xs font-semibold text-[#84CC16] uppercase tracking-wider mb-4">
+        {crop} - Seasonal Growth Calendar
       </h4>
       <div className="flex flex-col sm:flex-row justify-between gap-4 relative">
         {/* Connection line for larger screens */}
-        <div className="hidden sm:block absolute top-4 left-6 right-6 h-[2px] bg-[#EFE7D8] z-0"></div>
+        <div className="hidden sm:block absolute top-4 left-6 right-6 h-[2px] bg-white/10 z-0"></div>
         
         {/* Step 1: Sowing */}
         <div className="relative z-10 flex flex-col items-start sm:items-center flex-1">
-          <div className="w-8 h-8 rounded-full bg-[#5B7A3A] text-white flex items-center justify-center text-xs font-bold shadow-sm mb-2">1</div>
-          <div className="text-[11px] uppercase text-[#7A8A6A] font-semibold">Sowing</div>
-          <div className="text-sm font-medium text-[#22301A] sm:text-center mt-0.5">{calendar.sowing}</div>
+          <div className="w-8 h-8 rounded-full bg-[#142311] text-[#BEF264] border border-[#84CC16]/40 flex items-center justify-center text-xs font-bold shadow-[0_0_10px_rgba(132,204,22,0.3)] mb-2">1</div>
+          <div className="text-[10px] uppercase text-[#8E9B85] font-semibold tracking-wider">Sowing Window</div>
+          <div className="text-sm font-medium text-[#FDFAF2] sm:text-center mt-0.5">{calendar.sowing}</div>
         </div>
 
         {/* Step 2: Fertilizer */}
         <div className="relative z-10 flex flex-col items-start sm:items-center flex-1">
-          <div className="w-8 h-8 rounded-full bg-[#5B7A3A] text-white flex items-center justify-center text-xs font-bold shadow-sm mb-2">2</div>
-          <div className="text-[11px] uppercase text-[#7A8A6A] font-semibold">Fertilizer</div>
-          <div className="text-sm font-medium text-[#22301A] sm:text-center mt-0.5">{calendar.fertilizer}</div>
+          <div className="w-8 h-8 rounded-full bg-[#142311] text-[#BEF264] border border-[#84CC16]/40 flex items-center justify-center text-xs font-bold shadow-[0_0_10px_rgba(132,204,22,0.3)] mb-2">2</div>
+          <div className="text-[10px] uppercase text-[#8E9B85] font-semibold tracking-wider">Nutrient Application</div>
+          <div className="text-sm font-medium text-[#FDFAF2] sm:text-center mt-0.5">{calendar.fertilizer}</div>
         </div>
 
         {/* Step 3: Harvest */}
         <div className="relative z-10 flex flex-col items-start sm:items-center flex-1">
-          <div className="w-8 h-8 rounded-full bg-[#5B7A3A] text-white flex items-center justify-center text-xs font-bold shadow-sm mb-2">3</div>
-          <div className="text-[11px] uppercase text-[#7A8A6A] font-semibold">Harvest</div>
-          <div className="text-sm font-medium text-[#22301A] sm:text-center mt-0.5">{calendar.harvest}</div>
+          <div className="w-8 h-8 rounded-full bg-[#142311] text-[#BEF264] border border-[#84CC16]/40 flex items-center justify-center text-xs font-bold shadow-[0_0_10px_rgba(132,204,22,0.3)] mb-2">3</div>
+          <div className="text-[10px] uppercase text-[#8E9B85] font-semibold tracking-wider">Harvest Window</div>
+          <div className="text-sm font-medium text-[#FDFAF2] sm:text-center mt-0.5">{calendar.harvest}</div>
         </div>
       </div>
-    </div>
+    </SpotlightCard>
   );
 }
 

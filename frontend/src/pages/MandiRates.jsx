@@ -1,11 +1,14 @@
-import { useState, useEffect } from 'react';
-import { Store, TrendingUp, TrendingDown, Volume2, VolumeX, Search, Award, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Store, Volume2, VolumeX, RefreshCw, Search, TrendingUp, TrendingDown, CheckCircle2 } from 'lucide-react';
 import { speakText, stopSpeech, isSpeaking } from '../utils/speech';
+import SpotlightCard from '../components/SpotlightCard';
+import AnimatedCounter from '../components/AnimatedCounter';
+import ShinyText from '../components/ShinyText';
 
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
 const CROP_TABS = [
-  { id: '', label: 'All Crops' },
+  { id: '', label: 'All Commodities' },
   { id: 'soybean', label: 'Soybean (सोयाबीन)' },
   { id: 'cotton', label: 'Cotton (कापूस)' },
   { id: 'onion', label: 'Onion (कांदा)' },
@@ -26,7 +29,7 @@ export default function MandiRates() {
   const [loading, setLoading] = useState(true);
   const [speakingId, setSpeakingId] = useState(null);
 
-  const fetchRates = (crop = selectedCrop, district = searchDistrict) => {
+  const fetchRates = useCallback((crop = selectedCrop, district = searchDistrict) => {
     setLoading(true);
     let url = `${API_BASE}/mandi-prices`;
     const params = [];
@@ -42,291 +45,252 @@ export default function MandiRates() {
       })
       .catch((err) => console.error('Failed to load mandi rates', err))
       .finally(() => setLoading(false));
-  };
+  }, [selectedCrop, searchDistrict]);
 
   useEffect(() => {
     fetchRates(selectedCrop, searchDistrict);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCrop]);
 
-  const handleDistrictSearch = (e) => {
+  const handleSearch = (e) => {
     e.preventDefault();
     fetchRates(selectedCrop, searchDistrict);
   };
 
-  const handleSpeak = (item) => {
+  const handleAudioAdvice = (item) => {
     if (speakingId === item.crop && isSpeaking()) {
       stopSpeech();
       setSpeakingId(null);
       return;
     }
-
-    const mspText = item.msp ? `Government MSP is ${item.msp} rupees per quintal.` : '';
-    const topMandi = item.top_mandis?.[0];
-    const topMandiText = topMandi
-      ? `Highest price is at ${topMandi.market} in ${topMandi.district} at ${topMandi.price} rupees.`
-      : '';
-    const textToSpeak = `${item.crop_name}. Current modal price is ${item.modal_price} ${item.unit}. ${mspText} Recommendation: ${item.recommendation} ${topMandiText}`;
-
+    const mspText = item.msp ? `MSP benchmark is ₹${item.msp} per quintal.` : 'This crop trades on open market demand without MSP.';
+    const text = `APMC market rate for ${item.crop_name}. Modal price is ₹${item.modal_price} per quintal. ${mspText} Recommendation: ${item.recommendation}`;
     setSpeakingId(item.crop);
-    speakText(textToSpeak, () => setSpeakingId(null));
+    speakText(text, () => setSpeakingId(null));
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto pb-10">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-10 h-10 rounded-full bg-[#DCE8C8] flex items-center justify-center">
-              <Store size={20} strokeWidth={2} className="text-[#5B7A3A]" />
+    <div className="w-full max-w-4xl mx-auto space-y-6 pb-12 agri-animate-fade-in">
+      {/* Header Banner */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#0C150A] via-[#142311] to-[#1E3319] text-white p-6 sm:p-7 shadow-[0_12px_36px_rgba(0,0,0,0.5)] border border-white/10">
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-[#84CC16]/20 text-[#BEF264] border border-[#84CC16]/30 mb-2">
+              <Store size={13} />
+              <ShinyText text="APMC Market Rates & Government MSP" speed={4} className="text-[11px] font-semibold" />
             </div>
-            <h2 className="font-serif text-[26px] font-medium text-[#22301A]">APMC Mandi Rates &amp; Markets</h2>
+            <h2 className="font-serif text-2xl sm:text-3xl font-semibold text-[#FDFAF2]">
+              Live Mandi Price Intelligence
+            </h2>
+            <p className="text-xs sm:text-sm text-[#A3B39C] mt-1">
+              Real-time daily modal auction prices, 7-day trend analysis, MSP floor comparison, and top Maharashtra trading hubs.
+              {updatedAt && <span className="block mt-1 text-[11px] text-[#BEF264]/80">Updated: {updatedAt}</span>}
+            </p>
           </div>
-          <p className="text-[#7A8A6A] text-sm">
-            Live commodity prices, Govt. MSP comparisons, and highest paying mandis across Maharashtra.
-          </p>
+
+          <button
+            onClick={() => fetchRates(selectedCrop, searchDistrict)}
+            disabled={loading}
+            className="self-start sm:self-auto inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 active:scale-95 text-xs text-white font-semibold px-4 py-2.5 rounded-xl border border-white/20 transition shadow-sm cursor-pointer"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            <span>Update Rates</span>
+          </button>
         </div>
-        {updatedAt && (
-          <div className="flex items-center gap-2 text-xs text-[#8A8A6A] bg-white px-3.5 py-2 rounded-xl shadow-sm border border-[#F0EEE4]">
-            <RefreshCw size={13} className="text-[#5B7A3A]" />
-            <span>Updated: {updatedAt}</span>
-          </div>
-        )}
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="bg-white rounded-2xl p-4 shadow-[0_1px_3px_rgba(34,48,26,0.06),0_8px_24px_rgba(34,48,26,0.05)] mb-6">
-        <form onSubmit={handleDistrictSearch} className="flex flex-col sm:flex-row gap-3 mb-4">
+      {/* Filters & District Search */}
+      <div className="agri-glass-card p-5 sm:p-6 space-y-4">
+        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#A8A391]" />
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8E9B85]" />
             <input
               type="text"
-              placeholder="Search district or market (e.g. Nashik, Latur, Pune, Akola)..."
+              placeholder="Filter by Maharashtra District or APMC (e.g. Latur, Akola, Nashik)..."
               value={searchDistrict}
               onChange={(e) => setSearchDistrict(e.target.value)}
-              className="w-full bg-[#F6F4EC] rounded-xl pl-10 pr-4 py-2.5 text-sm text-[#22301A] outline-none focus:ring-2 focus:ring-[#5B7A3A]/30 placeholder-[#A8A391]"
+              className="w-full bg-[#10190D] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs sm:text-sm text-[#FDFAF2] placeholder-[#6B7C63] focus:outline-none focus:ring-2 focus:ring-[#84CC16]"
             />
           </div>
           <button
             type="submit"
-            className="bg-[#5B7A3A] text-white text-sm font-medium px-5 py-2.5 rounded-xl hover:bg-[#4A6830] transition shrink-0"
+            className="agri-btn-primary px-5 py-2.5 rounded-xl text-xs transition shadow-sm cursor-pointer"
           >
             Filter Mandis
           </button>
-          {searchDistrict && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearchDistrict('');
-                fetchRates(selectedCrop, '');
-              }}
-              className="bg-[#F6F4EC] text-[#7A8A6A] text-sm px-4 py-2.5 rounded-xl hover:bg-[#EFE7D8] transition shrink-0"
-            >
-              Clear
-            </button>
-          )}
         </form>
 
-        {/* Crop Pills */}
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
-          {CROP_TABS.map((tab) => {
-            const active = selectedCrop === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setSelectedCrop(tab.id)}
-                className={`whitespace-nowrap px-3.5 py-1.5 rounded-xl text-xs font-medium transition ${
-                  active
-                    ? 'bg-[#22301A] text-white'
-                    : 'bg-[#F6F4EC] text-[#5B6A4A] hover:bg-[#EFE7D8] hover:text-[#22301A]'
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+        {/* Commodity Category Tabs */}
+        <div>
+          <div className="text-[11px] font-bold text-[#8E9B85] uppercase tracking-wider mb-2">
+            Filter by Commodity
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {CROP_TABS.map((tab) => {
+              const isSelected = selectedCrop === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setSelectedCrop(tab.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                    isSelected
+                      ? 'bg-[#84CC16] text-[#070B06] font-bold shadow-[0_0_12px_rgba(132,204,22,0.35)]'
+                      : 'bg-[#10190D]/80 text-[#A8B5A0] hover:text-white border border-white/10 hover:border-white/25'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      {/* Loading state */}
-      {loading && (
-        <div className="text-center py-12 text-sm text-[#7A8A6A]">
-          Loading APMC market data...
+      {/* Commodity Cards Feed */}
+      {loading ? (
+        <div className="agri-glass-card p-10 text-center space-y-3">
+          <div className="w-8 h-8 border-3 border-[#84CC16]/20 border-t-[#84CC16] rounded-full animate-spin mx-auto" />
+          <p className="text-xs text-[#A8B5A0]">Fetching verified APMC market prices and arrival records...</p>
         </div>
-      )}
-
-      {/* Empty state */}
-      {!loading && data.length === 0 && (
-        <div className="bg-white rounded-2xl p-8 text-center text-[#7A8A6A] shadow-sm">
-          <Store size={32} className="mx-auto text-[#C8C2AE] mb-3" />
-          <p className="font-medium text-[#22301A]">No mandi records found</p>
-          <p className="text-xs text-[#A8A391] mt-1">Try clearing the district search or choosing another crop.</p>
+      ) : data.length === 0 ? (
+        <div className="agri-glass-card p-8 text-center text-xs text-[#8E9B85]">
+          No APMC mandi auctions matching your criteria. Try resetting the filter.
         </div>
-      )}
-
-      {/* Commodity List */}
-      {!loading && data.length > 0 && (
-        <div className="space-y-5">
+      ) : (
+        <div className="space-y-4">
           {data.map((item) => {
-            const mspDiff = item.msp ? item.modal_price - item.msp : null;
-            const isAboveMsp = mspDiff !== null && mspDiff >= 0;
-            const isSpeakingThis = speakingId === item.crop;
+            const hasMsp = item.msp && item.msp > 0;
+            const diffFromMsp = hasMsp ? item.modal_price - item.msp : null;
+            const isAboveMsp = diffFromMsp && diffFromMsp >= 0;
 
             return (
-              <div
+              <SpotlightCard
                 key={item.crop}
-                className="bg-white rounded-2xl p-5 sm:p-6 shadow-[0_1px_3px_rgba(34,48,26,0.06),0_8px_24px_rgba(34,48,26,0.05)] border border-[#F0EEE4] hover:border-[#DCE8C8] transition"
+                spotlightColor="rgba(132, 204, 22, 0.16)"
+                borderColor="rgba(132, 204, 22, 0.4)"
+                className="p-6 space-y-4"
               >
-                {/* Card Top: Title, Badges, Audio */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#F0EEE4]">
+                {/* Header row */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
                   <div>
-                    <div className="flex items-center gap-2.5">
-                      <h3 className="font-serif text-xl font-medium text-[#22301A]">{item.crop_name}</h3>
-                      <span className="text-[11px] bg-[#F6F4EC] text-[#7A8A6A] font-medium px-2.5 py-0.5 rounded-full">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-serif font-bold text-[#FDFAF2]">
+                        {item.crop_name}
+                      </h3>
+                      <span className="text-[10px] font-semibold bg-white/10 text-[#BEF264] px-2 py-0.5 rounded-md border border-white/10">
                         {item.variety}
                       </span>
                     </div>
+                    <div className="text-[11px] text-[#8E9B85] mt-0.5">
+                      Trading Unit: <strong className="text-[#FDFAF2]">{item.unit}</strong>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    {/* Audio Read-out button */}
+                  <div className="flex items-center gap-3 self-end sm:self-auto">
                     <button
-                      onClick={() => handleSpeak(item)}
-                      className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl transition ${
-                        isSpeakingThis
-                          ? 'bg-amber-100 text-amber-800 animate-pulse'
-                          : 'bg-[#F6F4EC] text-[#5B7A3A] hover:bg-[#DCE8C8]'
+                      onClick={() => handleAudioAdvice(item)}
+                      className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl border transition cursor-pointer ${
+                        speakingId === item.crop
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-400/50 animate-pulse'
+                          : 'bg-[#10190D] text-[#FDFAF2] border-white/15 hover:border-white/30'
                       }`}
-                      title="Audio: Bhaav Suniye"
                     >
-                      {isSpeakingThis ? <VolumeX size={14} /> : <Volume2 size={14} />}
-                      <span>{isSpeakingThis ? 'Rukiye' : 'Bhaav Suniye 🔊'}</span>
+                      {speakingId === item.crop ? <VolumeX size={13} /> : <Volume2 size={13} />}
+                      <span>Audio Advisory</span>
                     </button>
 
-                    {/* MSP Comparison Badge */}
-                    {item.msp ? (
-                      <span
-                        className={`text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1 ${
-                          isAboveMsp
-                            ? 'bg-[#EAF1DC] text-[#4A6830]'
-                            : 'bg-red-50 text-red-700'
-                        }`}
-                      >
-                        {isAboveMsp ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
-                        {isAboveMsp ? `Above MSP (+₹${mspDiff})` : `Below MSP (-₹${Math.abs(mspDiff)})`}
-                      </span>
-                    ) : (
-                      <span className="text-xs bg-[#F6F4EC] text-[#7A8A6A] font-medium px-2.5 py-1 rounded-full">
-                        Market Driven
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Price Matrix */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-4">
-                  <div className="bg-[#F6F4EC] rounded-xl p-3 text-center">
-                    <div className="text-[11px] text-[#7A8A6A] font-semibold uppercase">Modal Price</div>
-                    <div className="text-2xl font-serif font-semibold text-[#22301A] mt-0.5">
-                      ₹{item.modal_price.toLocaleString('en-IN')}
-                    </div>
-                    <div className="text-[10px] text-[#A8A391]">{item.unit}</div>
-                  </div>
-
-                  <div className="bg-[#F6F4EC] rounded-xl p-3 text-center">
-                    <div className="text-[11px] text-[#7A8A6A] font-semibold uppercase">Min – Max Range</div>
-                    <div className="text-sm font-semibold text-[#22301A] mt-1.5">
-                      ₹{item.min_price} – ₹{item.max_price}
-                    </div>
-                    <div className="text-[10px] text-[#A8A391]">Daily spread</div>
-                  </div>
-
-                  <div className="bg-[#F6F4EC] rounded-xl p-3 text-center">
-                    <div className="text-[11px] text-[#7A8A6A] font-semibold uppercase">Govt. MSP</div>
-                    <div className="text-sm font-semibold text-[#22301A] mt-1.5">
-                      {item.msp ? `₹${item.msp.toLocaleString('en-IN')}` : 'No MSP'}
-                    </div>
-                    <div className="text-[10px] text-[#A8A391]">{item.msp ? 'Official floor price' : 'Open auction'}</div>
-                  </div>
-
-                  <div className="bg-[#F6F4EC] rounded-xl p-3 text-center">
-                    <div className="text-[11px] text-[#7A8A6A] font-semibold uppercase">7-Day Trend</div>
-                    <div
-                      className={`text-sm font-semibold flex items-center justify-center gap-1 mt-1.5 ${
-                        item.trend === 'up'
-                          ? 'text-emerald-700'
-                          : item.trend === 'down'
-                          ? 'text-red-600'
-                          : 'text-[#5B6A4A]'
-                      }`}
-                    >
-                      {item.trend === 'up' && <TrendingUp size={15} />}
-                      {item.trend === 'down' && <TrendingDown size={15} />}
-                      {item.change_7d > 0 ? `+${item.change_7d}%` : `${item.change_7d}%`}
-                    </div>
-                    <div className="text-[10px] text-[#A8A391]">Weekly momentum</div>
-                  </div>
-                </div>
-
-                {/* Expert Recommendation Pill */}
-                <div className="bg-[#FDF9EE] border border-[#F2E8CE] rounded-xl p-3 flex items-start gap-2.5 mb-4">
-                  <span className="text-base mt-0.5">💡</span>
-                  <div>
-                    <span className="text-xs font-bold text-[#8A6A2A] uppercase tracking-wide mr-1.5">
-                      Market Strategy:
-                    </span>
-                    <span className="text-xs text-[#5A4A2A] font-medium leading-relaxed">
-                      {item.recommendation}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Top Mandis Section */}
-                <div>
-                  <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-[#7A8A6A] tracking-wide mb-2.5">
-                    <Award size={14} className="text-[#5B7A3A]" />
-                    <span>Top Paying APMC Markets for {item.crop_name.split(' ')[0]}</span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                    {item.top_mandis?.map((mandi, idx) => (
-                      <div
-                        key={mandi.market}
-                        className={`rounded-xl p-3 border transition ${
-                          idx === 0
-                            ? 'bg-[#F2F7E9] border-[#C8DEAB]'
-                            : 'bg-white border-[#F0EEE4]'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-1 mb-1">
-                          <span className="text-xs font-bold text-[#22301A] truncate">{mandi.market}</span>
-                          {idx === 0 && (
-                            <span className="text-[9px] bg-[#5B7A3A] text-white px-1.5 py-0.5 rounded-md font-semibold shrink-0">
-                              Top Rate
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-xs text-[#7A8A6A] mb-1">{mandi.district} District</div>
-                        <div className="flex items-baseline justify-between mt-2 pt-2 border-t border-[#F0EEE4]">
-                          <span className="font-serif font-bold text-base text-[#22301A]">
-                            ₹{mandi.price.toLocaleString('en-IN')}
-                          </span>
-                          <span className="text-[10px] text-[#A8A391]">{mandi.arrival_tonnes}T arrival</span>
-                        </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-serif font-bold text-[#84CC16]">
+                        <AnimatedCounter value={item.modal_price} prefix="₹" duration={1000} />
                       </div>
-                    ))}
+                      <div className="flex items-center justify-end gap-1 text-[11px] font-semibold">
+                        {item.change_7d >= 0 ? (
+                          <span className="text-[#4ADE80] flex items-center">
+                            <TrendingUp size={12} className="mr-0.5" /> +{item.change_7d}%
+                          </span>
+                        ) : (
+                          <span className="text-[#F87171] flex items-center">
+                            <TrendingDown size={12} className="mr-0.5" /> {item.change_7d}%
+                          </span>
+                        )}
+                        <span className="text-[#8E9B85] font-normal">7-day</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
+
+                {/* Price Metrics Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="bg-[#0B1309]/80 p-3 rounded-2xl border border-white/10">
+                    <div className="text-[10px] font-semibold text-[#8E9B85] uppercase">Modal Auction Price</div>
+                    <div className="text-base font-serif font-bold text-[#FDFAF2] mt-0.5">₹{item.modal_price}</div>
+                  </div>
+                  <div className="bg-[#0B1309]/80 p-3 rounded-2xl border border-white/10">
+                    <div className="text-[10px] font-semibold text-[#8E9B85] uppercase">Price Range</div>
+                    <div className="text-xs font-bold text-[#FDFAF2] mt-1">₹{item.min_price} – ₹{item.max_price}</div>
+                  </div>
+                  <div className="bg-[#0B1309]/80 p-3 rounded-2xl border border-white/10">
+                    <div className="text-[10px] font-semibold text-[#8E9B85] uppercase">MSP Floor Benchmark</div>
+                    <div className="text-base font-serif font-bold text-[#84CC16] mt-0.5">
+                      {hasMsp ? `₹${item.msp}` : 'Market Driven'}
+                    </div>
+                  </div>
+                  <div className="bg-[#0B1309]/80 p-3 rounded-2xl border border-white/10">
+                    <div className="text-[10px] font-semibold text-[#8E9B85] uppercase">Market Position</div>
+                    <div className="text-xs font-bold mt-1">
+                      {hasMsp ? (
+                        isAboveMsp ? (
+                          <span className="text-[#4ADE80]">+{diffFromMsp} above MSP</span>
+                        ) : (
+                          <span className="text-[#F87171]">{diffFromMsp} below MSP</span>
+                        )
+                      ) : (
+                        <span className="text-[#8E9B85]">Open Auction</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Selling Recommendation Banner */}
+                {item.recommendation && (
+                  <div className="bg-[#84CC16]/10 border border-[#84CC16]/30 p-3.5 rounded-2xl flex items-start gap-2.5 text-xs text-[#BEF264]">
+                    <CheckCircle2 size={16} className="text-[#84CC16] shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="text-[#FDFAF2]">Market Recommendation: </strong>
+                      <span>{item.recommendation}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Top Mandis Breakdown */}
+                {item.top_mandis?.length > 0 && (
+                  <div>
+                    <div className="text-[10px] font-bold text-[#8E9B85] uppercase tracking-wider mb-2">
+                      Top Performing APMC Mandi Hubs (Maharashtra)
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+                      {item.top_mandis.map((m) => (
+                        <div
+                          key={m.market}
+                          className="bg-[#0B1309]/80 p-3 rounded-xl border border-white/10 text-xs flex justify-between items-center hover:border-white/20 transition"
+                        >
+                          <div>
+                            <div className="font-bold text-[#FDFAF2]">{m.market}</div>
+                            <div className="text-[10px] text-[#8E9B85]">{m.district} • {m.arrival_tonnes}t arrival</div>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-sm font-serif font-bold text-[#84CC16]">₹{m.price}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </SpotlightCard>
             );
           })}
         </div>
       )}
-
-      {/* Advisory Footer */}
-      <div className="mt-8 bg-[#F6F4EC] rounded-2xl p-5 text-xs text-[#7A8A6A] text-center leading-relaxed">
-        <strong>Farmer Pro Tip:</strong> Always check moisture levels before bringing your produce to the mandi. Commodities with optimal moisture (below 10-12% for soybean &amp; wheat) fetch ₹150–₹250 higher per quintal at auction.
-      </div>
     </div>
   );
 }

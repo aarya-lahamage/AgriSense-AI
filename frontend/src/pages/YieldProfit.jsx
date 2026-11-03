@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, CloudRain, Thermometer, Sprout, Navigation, Ruler, IndianRupee, Wallet, Printer } from 'lucide-react';
+import { TrendingUp, CloudRain, Thermometer, Navigation, Ruler, IndianRupee, Wallet, Printer, Share2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import AnimatedCounter from '../components/AnimatedCounter';
+import SpotlightCard from '../components/SpotlightCard';
+import ShinyText from '../components/ShinyText';
 
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
 const numericRules = {
   rainfall: { min: 0, max: 5000 },
@@ -31,7 +34,6 @@ function YieldProfit() {
     land_area_acres: '', price_per_quintal: '', cultivation_cost: '',
   });
 
-  const [coords, setCoords] = useState(null);
   const [climateNote, setClimateNote] = useState('');
   const [resolving, setResolving] = useState(false);
   const [locError, setLocError] = useState('');
@@ -140,184 +142,246 @@ function YieldProfit() {
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto">
-      <h2 className="font-serif text-[26px] font-medium text-[#22301A] mb-1">
-        Yield &amp; Profit Prediction
-      </h2>
-      <p className="text-[#7A8A6A] text-sm mb-7">
-        Estimate expected crop yield and profit for the season.
-      </p>
+    <div className="w-full max-w-2xl mx-auto space-y-6 pb-12 agri-animate-fade-in">
+      {/* Header Banner */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#0C150A] via-[#142311] to-[#1E3319] text-white p-6 sm:p-7 shadow-[0_12px_36px_rgba(0,0,0,0.5)] border border-white/10">
+        <div className="relative z-10">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-[#84CC16]/20 text-[#BEF264] border border-[#84CC16]/30 mb-2">
+            <TrendingUp size={13} />
+            <ShinyText text="Economic Forecasting & Harvest Analytics" speed={4} className="text-[11px] font-semibold" />
+          </div>
+          <h2 className="font-serif text-2xl sm:text-3xl font-semibold text-[#FDFAF2]">
+            Yield &amp; Profit Prediction
+          </h2>
+          <p className="text-xs sm:text-sm text-[#A3B39C] mt-1">
+            Estimate expected crop yield and seasonal net profit using regional climate modeling and production economics.
+          </p>
+        </div>
+      </div>
 
-      <div className="bg-white rounded-2xl p-6 shadow-[0_1px_3px_rgba(34,48,26,0.06),0_8px_24px_rgba(34,48,26,0.05)] space-y-7">
+      <div className="agri-glass-card p-6 sm:p-8 space-y-7">
         {/* --- FORM INPUTS (Hidden during print) --- */}
         <div className="space-y-7 no-print">
           {/* --- CROP --- */}
           <div>
-            <h3 className="text-[13px] font-semibold text-[#22301A] uppercase tracking-wide mb-3.5">Crop</h3>
-          <select
-            name="crop" value={form.crop} onChange={handleChange}
-            className="w-full bg-[#F6F4EC] border border-transparent rounded-xl px-4 py-3 text-sm text-[#22301A] focus:outline-none focus:border-[#5B7A3A] focus:bg-white transition"
-          >
-            <option value="">Select crop</option>
-            {crops.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
-
-        <div className="h-px bg-[#EEEBDD]"></div>
-
-        {/* --- SEASONAL CLIMATE --- */}
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <h3 className="text-[13px] font-semibold text-[#22301A] uppercase tracking-wide">
-              Seasonal Climate
+            <h3 className="text-xs font-semibold text-[#84CC16] uppercase tracking-wider mb-2.5">
+              Select Crop
             </h3>
-            <button
-              type="button" onClick={getSeasonalEstimate} disabled={resolving}
-              className="flex items-center gap-1.5 text-xs text-[#5B7A3A] hover:text-[#4C6B4C] disabled:opacity-50 transition"
+            <select
+              name="crop"
+              value={form.crop}
+              onChange={handleChange}
+              className="w-full bg-[#10190D] border border-white/10 rounded-xl px-4 py-3 text-sm text-[#FDFAF2] focus:outline-none focus:ring-2 focus:ring-[#84CC16]"
             >
-              <Navigation size={13} strokeWidth={2} />
-              {resolving ? 'Fetching...' : 'Get estimate for my area'}
-            </button>
+              <option value="" className="bg-[#10190D]">Select crop</option>
+              {crops.map((c) => <option key={c} value={c} className="bg-[#10190D]">{c}</option>)}
+            </select>
           </div>
-          <p className="text-xs text-[#7A8A6A] mb-3.5">
-            Enter the expected rainfall and temperature for the <em>whole growing season</em> — not today's weather, since crops take months to mature.
-          </p>
-          {locError && <p className="text-red-500 text-xs mb-2">{locError}</p>}
-          {climateNote && <p className="text-[11px] text-[#5B7A3A] mb-2.5">✓ {climateNote}</p>}
-          <div className="grid grid-cols-2 gap-3">
-            {climateFields.map((f) => {
-              const fieldError = getError(f.name, form[f.name]);
-              return (
-                <div key={f.name} className={`rounded-xl p-3.5 shadow-[0_1px_2px_rgba(176,143,82,0.08)] ${fieldError ? 'bg-red-50 ring-1 ring-red-300' : 'bg-[#FBF3E3]'}`}>
-                  <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center mb-2 shadow-sm">
-                    <f.icon size={14} strokeWidth={1.8} className={fieldError ? 'text-red-400' : 'text-[#B08F52]'} />
-                  </div>
-                  <label className="text-[10px] text-[#A8895A] block leading-tight mb-0.5">{f.label}</label>
-                  <div className="flex items-baseline gap-1">
-                    <input
-                      type="number" step="any" name={f.name} value={form[f.name]} onChange={handleChange}
-                      className="w-full bg-transparent text-[16px] font-medium text-[#3D2E14] focus:outline-none leading-tight min-w-0"
-                    />
-                    <span className="text-[10px] text-[#C4A876] shrink-0">{f.unit}</span>
-                  </div>
-                  {fieldError && <p className="text-[10px] text-red-500 mt-1">{fieldError}</p>}
-                </div>
-              );
-            })}
-          </div>
-        </div>
 
-        <div className="h-px bg-[#EEEBDD]"></div>
+          <div className="h-px bg-white/10" />
 
-        {/* --- BUSINESS INPUTS --- */}
-        <div>
-          <h3 className="text-[13px] font-semibold text-[#22301A] uppercase tracking-wide mb-1">
-            Farm &amp; Market Details
-          </h3>
-          <p className="text-xs text-[#7A8A6A] mb-3.5">
-            Used to calculate your total production and estimated profit.
-          </p>
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            {businessFields.map((f) => {
-              const fieldError = getError(f.name, form[f.name]);
-              return (
-                <div key={f.name} className={`rounded-xl p-3.5 shadow-[0_1px_2px_rgba(91,122,58,0.08)] ${fieldError ? 'bg-red-50 ring-1 ring-red-300' : 'bg-[#E5EFD5]'}`}>
-                  <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center mb-2 shadow-sm">
-                    <f.icon size={14} strokeWidth={1.8} className={fieldError ? 'text-red-400' : 'text-[#5B7A3A]'} />
-                  </div>
-                  <label className="text-[10px] text-[#5B7A3A] block leading-tight mb-0.5">{f.label}</label>
-                  <div className="flex items-baseline gap-1">
-                    <input
-                      type="number" step="any" name={f.name} value={form[f.name]} onChange={handleChange}
-                      className="w-full bg-transparent text-[16px] font-medium text-[#22301A] focus:outline-none leading-tight min-w-0"
-                    />
-                    <span className="text-[10px] text-[#7A9A5A] shrink-0">{f.unit}</span>
-                  </div>
-                  {fieldError && <p className="text-[10px] text-red-500 mt-1">{fieldError}</p>}
-                </div>
-              );
-            })}
-          </div>
-          <div className={`rounded-xl p-3.5 shadow-[0_1px_2px_rgba(91,122,58,0.08)] ${getError('cultivation_cost', form.cultivation_cost) ? 'bg-red-50 ring-1 ring-red-300' : 'bg-[#E5EFD5]'}`}>
-            <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center mb-2 shadow-sm">
-              <Wallet size={14} strokeWidth={1.8} className="text-[#5B7A3A]" />
+          {/* --- SEASONAL CLIMATE --- */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-xs font-semibold text-[#84CC16] uppercase tracking-wider">
+                Seasonal Climate
+              </h3>
+              <button
+                type="button"
+                onClick={getSeasonalEstimate}
+                disabled={resolving}
+                className="flex items-center gap-1.5 text-xs text-[#BEF264] hover:text-[#84CC16] disabled:opacity-50 transition cursor-pointer"
+              >
+                <Navigation size={13} strokeWidth={2} />
+                {resolving ? 'Fetching...' : 'Get estimate for my area'}
+              </button>
             </div>
-            <label className="text-[10px] text-[#5B7A3A] block leading-tight mb-0.5">
-              Total Cultivation Cost (seeds, labor, fertilizer, etc.)
-            </label>
-            <div className="flex items-baseline gap-1">
-              <input
-                type="number" step="any" name="cultivation_cost" value={form.cultivation_cost} onChange={handleChange}
-                className="w-full bg-transparent text-[16px] font-medium text-[#22301A] focus:outline-none leading-tight min-w-0"
-              />
-              <span className="text-[10px] text-[#7A9A5A] shrink-0">₹ total</span>
+            <p className="text-xs text-[#8E9B85] mb-3.5">
+              Expected rainfall and temperature for the full growing season.
+            </p>
+            {locError && <p className="text-red-400 text-xs mb-2">{locError}</p>}
+            {climateNote && <p className="text-xs text-[#BEF264] mb-2.5">✓ {climateNote}</p>}
+            <div className="grid grid-cols-2 gap-3">
+              {climateFields.map((f) => {
+                const fieldError = getError(f.name, form[f.name]);
+                return (
+                  <div
+                    key={f.name}
+                    className={`rounded-2xl p-4 border transition ${
+                      fieldError ? 'bg-red-950/40 border-red-500/50' : 'bg-[#0B1309]/80 border-white/10 hover:border-white/20'
+                    }`}
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center mb-2 border border-white/10 text-[#F59E0B]">
+                      <f.icon size={14} strokeWidth={1.8} />
+                    </div>
+                    <label className="text-[10px] text-[#8E9B85] block leading-tight mb-1">{f.label}</label>
+                    <div className="flex items-baseline gap-1">
+                      <input
+                        type="number"
+                        step="any"
+                        name={f.name}
+                        value={form[f.name]}
+                        onChange={handleChange}
+                        className="w-full bg-transparent text-base font-serif font-bold text-[#FDFAF2] focus:outline-none min-w-0"
+                      />
+                      <span className="text-[10px] text-[#6B7C63] shrink-0 font-medium">{f.unit}</span>
+                    </div>
+                    {fieldError && <p className="text-[10px] text-red-400 mt-1">{fieldError}</p>}
+                  </div>
+                );
+              })}
             </div>
-            {getError('cultivation_cost', form.cultivation_cost) && (
-              <p className="text-[10px] text-red-500 mt-1">{getError('cultivation_cost', form.cultivation_cost)}</p>
-            )}
           </div>
-        </div>
 
-        <button
-          onClick={handleSubmit} disabled={!allFilled || loading || hasErrors}
-          className="w-full bg-[#5B7A3A] text-white text-sm font-medium px-4 py-3.5 rounded-xl hover:bg-[#4C6B4C] transition disabled:opacity-40 shadow-[0_4px_12px_rgba(91,122,58,0.25)]"
-        >
-          {loading ? 'Calculating...' : 'Predict Yield & Profit'}
-        </button>
+          <div className="h-px bg-white/10" />
 
-        {error && <p className="text-red-500 text-sm">{error}</p>}
+          {/* --- BUSINESS INPUTS --- */}
+          <div>
+            <h3 className="text-xs font-semibold text-[#84CC16] uppercase tracking-wider mb-1">
+              Farm &amp; Market Details
+            </h3>
+            <p className="text-xs text-[#8E9B85] mb-3.5">
+              Used to calculate your total production and estimated profit.
+            </p>
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              {businessFields.map((f) => {
+                const fieldError = getError(f.name, form[f.name]);
+                return (
+                  <div
+                    key={f.name}
+                    className={`rounded-2xl p-4 border transition ${
+                      fieldError ? 'bg-red-950/40 border-red-500/50' : 'bg-[#0B1309]/80 border-white/10 hover:border-white/20'
+                    }`}
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center mb-2 border border-white/10 text-[#84CC16]">
+                      <f.icon size={14} strokeWidth={1.8} />
+                    </div>
+                    <label className="text-[10px] text-[#8E9B85] block leading-tight mb-1">{f.label}</label>
+                    <div className="flex items-baseline gap-1">
+                      <input
+                        type="number"
+                        step="any"
+                        name={f.name}
+                        value={form[f.name]}
+                        onChange={handleChange}
+                        className="w-full bg-transparent text-base font-serif font-bold text-[#FDFAF2] focus:outline-none min-w-0"
+                      />
+                      <span className="text-[10px] text-[#6B7C63] shrink-0 font-medium">{f.unit}</span>
+                    </div>
+                    {fieldError && <p className="text-[10px] text-red-400 mt-1">{fieldError}</p>}
+                  </div>
+                );
+              })}
+            </div>
+            <div className={`rounded-2xl p-4 border transition ${getError('cultivation_cost', form.cultivation_cost) ? 'bg-red-950/40 border-red-500/50' : 'bg-[#0B1309]/80 border-white/10 hover:border-white/20'}`}>
+              <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center mb-2 border border-white/10 text-[#84CC16]">
+                <Wallet size={14} strokeWidth={1.8} />
+              </div>
+              <label className="text-[10px] text-[#8E9B85] block leading-tight mb-1">
+                Total Cultivation Cost (seeds, labor, fertilizer, machinery)
+              </label>
+              <div className="flex items-baseline gap-1">
+                <input
+                  type="number"
+                  step="any"
+                  name="cultivation_cost"
+                  value={form.cultivation_cost}
+                  onChange={handleChange}
+                  className="w-full bg-transparent text-base font-serif font-bold text-[#FDFAF2] focus:outline-none min-w-0"
+                />
+                <span className="text-[10px] text-[#6B7C63] shrink-0 font-medium">₹ total</span>
+              </div>
+              {getError('cultivation_cost', form.cultivation_cost) && (
+                <p className="text-[10px] text-red-400 mt-1">{getError('cultivation_cost', form.cultivation_cost)}</p>
+              )}
+            </div>
+          </div>
+
+          <button
+            onClick={handleSubmit}
+            disabled={!allFilled || loading || hasErrors}
+            className="w-full agri-btn-primary py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
+          >
+            {loading ? 'Calculating Harvest Model...' : 'Predict Yield & Profit'}
+          </button>
+
+          {error && <p className="text-red-400 text-sm">{error}</p>}
         </div>
 
         {result && (
-          <div className="pt-1 space-y-3">
-            <h3 className="text-[13px] font-semibold text-[#22301A] uppercase tracking-wide mb-1">Results</h3>
+          <div className="pt-2 space-y-4 agri-animate-fade-in">
+            <h3 className="text-xs font-semibold text-[#84CC16] uppercase tracking-wider mb-1">
+              Harvest &amp; Profit Forecast
+            </h3>
 
-            <div className="rounded-xl px-5 py-4 bg-[#22301A] text-white shadow-[0_4px_16px_rgba(34,48,26,0.18)] flex items-center gap-4">
-              <div className="w-11 h-11 rounded-full bg-[#334423] flex items-center justify-center shrink-0">
-                <TrendingUp size={20} strokeWidth={1.8} className="text-[#B8D08A]" />
+            <SpotlightCard
+              spotlightColor="rgba(132, 204, 22, 0.22)"
+              borderColor="rgba(132, 204, 22, 0.5)"
+              className="rounded-2xl p-5 bg-gradient-to-r from-[#142311] to-[#1C3218] text-white shadow-lg border border-[#84CC16]/40 flex items-center gap-4"
+            >
+              <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center shrink-0 border border-white/15">
+                <TrendingUp size={22} strokeWidth={1.8} className="text-[#84CC16]" />
               </div>
               <div>
-                <div className="text-[11px] text-[#B8D08A] uppercase tracking-wide">Predicted Yield</div>
-                <div className="text-xl font-serif font-medium mt-0.5">
-                  {result.predicted_yield_tonnes_per_ha} tonnes/hectare
+                <div className="text-[11px] text-[#BEF264] uppercase tracking-wide">Predicted Yield</div>
+                <div className="text-2xl font-serif font-bold text-[#FDFAF2] mt-0.5">
+                  <AnimatedCounter value={result.predicted_yield_tonnes_per_ha} decimals={2} duration={1000} />{' '}
+                  <span className="text-sm font-sans font-normal text-[#A3B39C]">tonnes / hectare</span>
                 </div>
               </div>
-            </div>
+            </SpotlightCard>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-[#F6F4EC] rounded-xl p-4">
-                <div className="text-[10px] text-[#8A8A6A] uppercase">Total Production</div>
-                <div className="text-lg font-medium text-[#22301A] mt-0.5">
-                  {result.profit.total_production_tonnes} tonnes
+              <SpotlightCard
+                spotlightColor="rgba(132, 204, 22, 0.14)"
+                borderColor="rgba(132, 204, 22, 0.3)"
+                className="bg-[#0B1309]/80 rounded-2xl p-4 border border-white/10"
+              >
+                <div className="text-[10px] text-[#8E9B85] uppercase tracking-wider">Total Production</div>
+                <div className="text-lg font-serif font-bold text-[#FDFAF2] mt-0.5">
+                  <AnimatedCounter value={result.profit.total_production_tonnes} decimals={2} duration={1000} />{' '}
+                  <span className="text-xs font-sans font-normal text-[#8E9B85]">tonnes</span>
                 </div>
-              </div>
-              <div className="bg-[#F6F4EC] rounded-xl p-4">
-                <div className="text-[10px] text-[#8A8A6A] uppercase">Est. Revenue</div>
-                <div className="text-lg font-medium text-[#22301A] mt-0.5">
-                  ₹{result.profit.estimated_revenue.toLocaleString('en-IN')}
+              </SpotlightCard>
+              <SpotlightCard
+                spotlightColor="rgba(56, 189, 248, 0.14)"
+                borderColor="rgba(56, 189, 248, 0.3)"
+                className="bg-[#0B1309]/80 rounded-2xl p-4 border border-white/10"
+              >
+                <div className="text-[10px] text-[#8E9B85] uppercase tracking-wider">Est. Gross Revenue</div>
+                <div className="text-lg font-serif font-bold text-[#FDFAF2] mt-0.5">
+                  <AnimatedCounter value={result.profit.estimated_revenue} prefix="₹" duration={1200} />
                 </div>
-              </div>
+              </SpotlightCard>
             </div>
 
-            <div className={`rounded-xl p-4 ${result.profit.estimated_profit >= 0 ? 'bg-[#E5EFD5]' : 'bg-[#FBE9E7]'}`}>
-              <div className={`text-[10px] uppercase ${result.profit.estimated_profit >= 0 ? 'text-[#5B7A3A]' : 'text-[#C75B44]'}`}>
-                Estimated Profit
+            <SpotlightCard
+              spotlightColor={result.profit.estimated_profit >= 0 ? "rgba(34, 197, 94, 0.2)" : "rgba(239, 68, 68, 0.2)"}
+              borderColor={result.profit.estimated_profit >= 0 ? "rgba(34, 197, 94, 0.4)" : "rgba(239, 68, 68, 0.4)"}
+              className={`rounded-2xl p-5 border ${
+                result.profit.estimated_profit >= 0
+                  ? 'bg-[#0F2913]/70 border-[#22C55E]/40 text-[#4ADE80]'
+                  : 'bg-[#2A0F0D]/70 border-[#EF4444]/40 text-[#F87171]'
+              }`}
+            >
+              <div className="text-[10px] uppercase tracking-wider opacity-80">
+                Estimated Net Profit
               </div>
-              <div className={`text-2xl font-serif font-medium mt-0.5 ${result.profit.estimated_profit >= 0 ? 'text-[#22301A]' : 'text-[#C75B44]'}`}>
-                ₹{result.profit.estimated_profit.toLocaleString('en-IN')}
+              <div className="text-2xl font-serif font-bold mt-0.5">
+                <AnimatedCounter value={result.profit.estimated_profit} prefix="₹" duration={1400} />
               </div>
-            </div>
+            </SpotlightCard>
 
-            <p className="text-[11px] text-[#A8A391] leading-relaxed">{result.disclaimer}</p>
+            <p className="text-[11px] text-[#8E9B85] leading-relaxed">{result.disclaimer}</p>
 
             <div className="mt-4 flex flex-wrap items-center gap-3 no-print">
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="inline-flex items-center gap-2 bg-[#22301A] text-white rounded-xl px-4 py-2 hover:bg-[#334423] transition-colors text-sm font-medium"
+                className="inline-flex items-center gap-2 bg-white/10 text-white rounded-xl px-4 py-2 hover:bg-white/20 transition-colors text-xs font-semibold border border-white/15 cursor-pointer"
               >
-                <Printer size={16} />
-                Print / Save
+                <Printer size={15} />
+                <span>Print / Save</span>
               </button>
               <a
                 href={`https://wa.me/?text=${encodeURIComponent(
@@ -325,10 +389,10 @@ function YieldProfit() {
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 bg-[#25D366] text-white rounded-xl px-4 py-2 hover:bg-[#20bd5a] transition-colors text-sm font-medium"
+                className="inline-flex items-center gap-2 bg-[#25D366] text-white rounded-xl px-4 py-2 hover:bg-[#20bd5a] transition-colors text-xs font-semibold cursor-pointer"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-                Share on WhatsApp
+                <Share2 size={15} />
+                <span>Share on WhatsApp</span>
               </a>
             </div>
           </div>
