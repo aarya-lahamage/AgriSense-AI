@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: agrisense-ai-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements-deploy.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false          # Set manually in Render dashboard
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: ADAPTION_API_KEY
+        sync: false          # Set manually if you have one
+      - key: ALLOWED_ORIGINS
+        value: https://agrisense-ai.vercel.app
+    healthCheckPath: /health

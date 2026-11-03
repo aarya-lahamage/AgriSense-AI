@@ -4,20 +4,32 @@
 # Trained with class_weight="balanced" to fairly represent rare fertilizers
 # (some had as few as 6-25 samples). Test accuracy: 90.70% — a small
 # trade-off from 92.03% for much better coverage of all 19 fertilizer types.
+import sys
 import joblib
 import pandas as pd
 import os
 
 _DIR = os.path.join(os.path.dirname(__file__), "models", "fertilizer")
 
-fert_model = joblib.load(os.path.join(_DIR, "fertilizer_model.pkl"))
-soil_encoder = joblib.load(os.path.join(_DIR, "soil_encoder.pkl"))
-crop_encoder = joblib.load(os.path.join(_DIR, "crop_encoder.pkl"))
-fert_encoder = joblib.load(os.path.join(_DIR, "fertilizer_encoder.pkl"))
-feature_cols = joblib.load(os.path.join(_DIR, "feature_cols.pkl"))
+# Graceful loading — models may not exist on cloud deployments without large files
+_MODELS_AVAILABLE = False
+fert_model = soil_encoder = crop_encoder = fert_encoder = feature_cols = None
+SOIL_TYPES = []
+CROP_TYPES = []
 
-SOIL_TYPES = sorted(soil_encoder.classes_.tolist())
-CROP_TYPES = sorted(crop_encoder.classes_.tolist())
+try:
+    fert_model = joblib.load(os.path.join(_DIR, "fertilizer_model.pkl"))
+    soil_encoder = joblib.load(os.path.join(_DIR, "soil_encoder.pkl"))
+    crop_encoder = joblib.load(os.path.join(_DIR, "crop_encoder.pkl"))
+    fert_encoder = joblib.load(os.path.join(_DIR, "fertilizer_encoder.pkl"))
+    feature_cols = joblib.load(os.path.join(_DIR, "feature_cols.pkl"))
+    SOIL_TYPES = sorted(soil_encoder.classes_.tolist())
+    CROP_TYPES = sorted(crop_encoder.classes_.tolist())
+    _MODELS_AVAILABLE = True
+except Exception as _e:
+    print(f"[fertilizer_service] WARNING: Models not loaded — {_e}", file=sys.stderr)
+    SOIL_TYPES = ["Black", "Clayey", "Loamy", "Red", "Sandy"]
+    CROP_TYPES = ["Wheat", "Rice", "Cotton", "Sugarcane", "Soybean", "Maize", "Jowar", "Bajra"]
 
 FERTILIZER_INFO = {
     "Urea": "High nitrogen (46% N) — boosts leafy, vegetative growth.",
@@ -66,6 +78,8 @@ FERTILIZER_PRICES = {
 
 
 def top_fertilizers(nitrogen, phosphorus, potassium, ph, rainfall, temperature, soil_color, crop, top_n=3):
+    if not _MODELS_AVAILABLE:
+        raise RuntimeError("Fertilizer model not available on this deployment. Models require local setup.")
     if soil_color not in soil_encoder.classes_:
         raise ValueError(f"Unknown soil_color '{soil_color}'. Valid: {SOIL_TYPES}")
     if crop not in crop_encoder.classes_:

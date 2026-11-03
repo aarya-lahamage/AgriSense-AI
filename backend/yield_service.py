@@ -1,4 +1,5 @@
 # Model trained by Shweta — see /docs/PROJECT_CONTEXT.md for details
+import sys
 import joblib
 import numpy as np
 import requests
@@ -7,12 +8,23 @@ import os
 
 _DIR = os.path.join(os.path.dirname(__file__), "models", "yield")
 
-yield_model = joblib.load(os.path.join(_DIR, "crop_yield_model.pkl"))
-_saved = joblib.load(os.path.join(_DIR, "encoders.pkl"))
-encoders = _saved["encoders"]
-feature_cols = _saved["feature_cols"]
+# Graceful loading — models may not exist on cloud deployments without large files
+_MODELS_AVAILABLE = False
+yield_model = None
+encoders = {}
+feature_cols = []
+CROP_TYPES = []
 
-CROP_TYPES = sorted(encoders["Item"].classes_.tolist())
+try:
+    yield_model = joblib.load(os.path.join(_DIR, "crop_yield_model.pkl"))
+    _saved = joblib.load(os.path.join(_DIR, "encoders.pkl"))
+    encoders = _saved["encoders"]
+    feature_cols = _saved["feature_cols"]
+    CROP_TYPES = sorted(encoders["Item"].classes_.tolist())
+    _MODELS_AVAILABLE = True
+except Exception as _e:
+    print(f"[yield_service] WARNING: Models not loaded — {_e}", file=sys.stderr)
+    CROP_TYPES = ["Maize", "Rice, paddy", "Sorghum", "Soybeans", "Wheat", "Potatoes"]
 
 # India's national pesticide use is a country-level figure in the training
 # data, not something an individual farmer can report. Recent GOI/FAO
@@ -33,6 +45,8 @@ CROP_DURATION_DAYS = {
 def predict_yield(crop, rainfall, avg_temp, pesticides_tonnes=None):
     """Year is not farmer input — it only captures a historical technology
     trend in the training data, so we always use the current year."""
+    if not _MODELS_AVAILABLE:
+        raise RuntimeError("Yield model not available on this deployment. Models require local setup.")
     year = date.today().year
     pesticides = pesticides_tonnes if pesticides_tonnes is not None else INDIA_PESTICIDE_TONNES_DEFAULT
 

@@ -580,6 +580,8 @@ def predict_fertilizer_endpoint(data: FertilizerInput, current_user: dict = Depe
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 @app.get("/yield-crops")
@@ -630,6 +632,8 @@ def predict_yield_endpoint(data: YieldInput, current_user: dict = Depends(get_cu
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 class RegisterInput(BaseModel):
