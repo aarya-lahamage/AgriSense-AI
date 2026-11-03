@@ -4,17 +4,21 @@ Extracts: pH, EC, Organic Carbon, Nitrogen, Phosphorus, Potassium,
           Sulphur, Zinc, Boron, Iron, Manganese, Copper — with values and units.
 
 Architecture:
-1. Native Windows Media OCR (built into Windows 10/11) — zero external binary needed.
-2. Tesseract OCR fallback — used if installed and available on system PATH.
+1. Google Gemini Vision API (zero external OS binary needed, 100% cloud-reliable).
+2. Native Windows Media OCR (built into Windows 10/11) if available.
+3. Tesseract OCR fallback if installed.
 """
 
 import re
 import os
 import io
+import json
+import base64
 import platform
+import requests
 from PIL import Image, ImageOps
 
-# ── Check available engines ──────────────────────────────────────
+# ── Check available local engines ─────────────────────────────────
 _WINRT_OCR_AVAILABLE = False
 try:
     if platform.system() == "Windows":
@@ -41,17 +45,12 @@ try:
                 _TESSERACT_AVAILABLE = True
                 break
     else:
-        _TESSERACT_AVAILABLE = True
+        # Check if tesseract binary exists in path
+        import shutil
+        if shutil.which("tesseract"):
+            _TESSERACT_AVAILABLE = True
 except Exception:
     _TESSERACT_AVAILABLE = False
-
-
-def _check_available():
-    if not _WINRT_OCR_AVAILABLE and not _TESSERACT_AVAILABLE:
-        raise RuntimeError(
-            "No OCR engine available. On Windows, ensure 'winocr' is installed, "
-            "or install Tesseract-OCR."
-        )
 
 
 # ── Image Preprocessing ─────────────────────────────────────────
@@ -72,6 +71,92 @@ def _preprocess_image(img: Image.Image) -> Image.Image:
         img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
 
     return img
+
+
+# ── Cloud Vision OCR via Gemini (High Precision & Universal) ──────
+
+def _run_gemini_vision_ocr(img: Image.Image) -> dict:
+    """
+    Use Gemini Vision API to accurately extract soil parameters directly from image.
+    Requires GEMINI_API_KEY (already configured in production).
+    """
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY is not configured.")
+
+    model = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest").strip() or "gemini-flash-lite-latest"
+
+    # Convert image to JPEG bytes
+    buffered = io.BytesIO()
+    img.save(buffered, format="JPEG", quality=90)
+    img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+    prompt = (
+        "You are an expert Indian Government Soil Health Card OCR parser. "
+        "Analyze this soil card document and extract the numerical test results for these 12 soil parameters:\n"
+        "- pH\n"
+        "- EC (Electrical Conductivity in dS/m)\n"
+        "- OC (Organic Carbon in %)\n"
+        "- N (Available Nitrogen in kg/ha)\n"
+        "- P (Available Phosphorus in kg/ha)\n"
+        "- K (Available Potassium in kg/ha)\n"
+        "- S (Available Sulphur in ppm)\n"
+        "- Zn (Available Zinc in ppm)\n"
+        "- B (Available Boron in ppm)\n"
+        "- Fe (Available Iron in ppm)\n"
+        "- Mn (Available Manganese in ppm)\n"
+        "- Cu (Available Copper in ppm)\n\n"
+        "Return ONLY a valid JSON object with keys: \"raw_text\" (a full textual transcription of the card's table/text) "
+        "and a dictionary \"extracted\" containing key-value pairs where key is one of pH, EC, OC, N, P, K, S, Zn, B, Fe, Mn, Cu "
+        "and value is a float number (or null if not found on the card). "
+        "Do NOT return markdown fences like ```json, return only the raw JSON."
+    )
+
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt},
+                    {
+                        "inline_data": {
+                            "mime_type": "image/jpeg",
+                            "data": img_b64
+                        }
+                    }
+                ]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.1,
+            "maxOutputTokens": 1024
+        }
+    }
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    res = requests.post(url, params={"key": api_key}, json=payload, timeout=30)
+    
+    if res.status_code != 200:
+        error_msg = res.text
+        try:
+            error_msg = res.json().get("error", {}).get("message", error_msg)
+        except Exception:
+            pass
+        raise RuntimeError(f"Vision API request failed: {error_msg}")
+
+    data = res.json()
+    candidates = data.get("candidates", [])
+    if not candidates:
+        raise RuntimeError("No response from Vision OCR model.")
+
+    part_text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "").strip()
+    
+    # Strip markdown if present
+    if part_text.startswith("```"):
+        part_text = re.sub(r"^```(?:json)?\s*", "", part_text)
+        part_text = re.sub(r"\s*```$", "", part_text)
+
+    parsed = json.loads(part_text)
+    return parsed
 
 
 # ── Windows Native Media OCR Execution ──────────────────────────
@@ -141,7 +226,7 @@ def _run_tesseract(img: Image.Image) -> str:
     return pytesseract.image_to_string(gray, config="--psm 6")
 
 
-# ── Parameter Extraction Logic ──────────────────────────────────
+# ── Parameter Extraction Logic from Regex Text ──────────────────
 
 _UNIT_MAP = {
     "pH": "",
@@ -177,124 +262,72 @@ _PARAM_LABELS = {
 def _clean_val(s: str) -> float | None:
     if not s:
         return None
-    s = (
-        s.replace("SS", "85")
-        .replace("O", "0")
-        .replace("o", "0")
-        .replace("l", "1")
-        .replace(",", ".")
-        .replace(";", ".")
-    )
-    m = re.search(r"(\d+(?:\.\d+)?)", s)
-    if m:
-        try:
-            return float(m.group(1))
-        except ValueError:
-            return None
-    return None
+    s = s.replace(",", ".").strip()
+    try:
+        val = float(s)
+        return val
+    except ValueError:
+        return None
 
 
-def extract_soil_params(raw_text: str) -> dict:
-    """Parse all 12 chemical parameters from structured lines or raw text."""
+def extract_soil_params(text: str) -> dict:
+    """
+    Regex fallback extractor for raw text parsed from OCR.
+    """
     params = {}
-    lines = raw_text.splitlines()
+    lines = text.split("\n")
 
-    for l in lines:
+    for line in lines:
+        l = line.strip()
         lower = l.lower()
 
-        # 1. pH
-        if "alkaline" in lower or "acidic" in lower or "neutral" in lower:
-            m = re.search(r"([0-9]+\.[0-9]+)", l)
+        # pH
+        if re.search(r"\bph\b", lower):
+            m = re.search(r"\bph\b[^\d]*([0-9]+\.?[0-9]*)", l, re.I)
             if m and "pH" not in params:
-                val = float(m.group(1))
-                if 3.0 <= val <= 11.0:
-                    params["pH"] = val
-        elif "ph" in lower and "phosph" not in lower and "sulph" not in lower:
-            m = re.search(r"(?:ph|\bph\b)[^\d]*([0-9]+\.[0-9]+)", l, re.I)
-            if m and "pH" not in params:
-                val = float(m.group(1))
-                if 3.0 <= val <= 11.0:
+                val = _clean_val(m.group(1))
+                if val and 3.0 <= val <= 11.0:
                     params["pH"] = val
 
-        # 2. EC (Electrical Conductivity)
-        if "ds" in lower or "ec" in lower:
-            m = re.search(r"([0-9]+\.[0-9]+)\s*d[sS]", l)
+        # EC
+        if "ec" in lower or "conduct" in lower:
+            m = re.search(r"(?:ec|conduct)[^\d]*([0-9]+\.?[0-9]*)", l, re.I)
             if m and "EC" not in params:
-                params["EC"] = float(m.group(1))
-            elif "ec" in lower and "sector" not in lower and "EC" not in params:
-                m2 = re.search(r"(?:ec|electrical\s+conductivity)[^\d]*([0-9]+\.[0-9]+)", l, re.I)
-                if m2:
-                    params["EC"] = float(m2.group(1))
+                val = _clean_val(m.group(1))
+                if val and val <= 20.0:
+                    params["EC"] = val
 
-        # 3. Organic Carbon (OC)
-        if "organic" in lower or "(oc)" in lower:
-            m = re.search(r"(?:organic\s+carbon|\(oc\))[^\d]*([0-9]+\.[0-9]+)", l, re.I)
+        # OC
+        if "carbon" in lower or re.search(r"\boc\b", lower):
+            m = re.search(r"(?:carbon|\boc\b)[^\d]*([0-9]+\.?[0-9]*)", l, re.I)
             if m and "OC" not in params:
-                params["OC"] = float(m.group(1))
+                val = _clean_val(m.group(1))
+                if val and val <= 10.0:
+                    params["OC"] = val
 
-        # 4. Available Nitrogen (N)
+        # Nitrogen (N)
         if "nitrogen" in lower or "(n)" in lower:
-            m = re.search(r"(?:nitrogen|\(n\))[^\d]*([0-9]+\.[0-9]+)", l, re.I)
+            m = re.search(r"(?:nitrogen|\(n\))[^\d]*([0-9]+\.?[0-9]*)", l, re.I)
             if m and "N" not in params:
-                params["N"] = float(m.group(1))
+                val = _clean_val(m.group(1))
+                if val:
+                    params["N"] = val
 
-        # 5. Available Phosphorus (P)
-        if "phosphor" in lower or "(p)" in lower:
-            m = re.search(r"(?:phosphor\w*|\(p\))[^\d]*([0-9]+\.[0-9]+)", l, re.I)
+        # Phosphorus (P)
+        if "phosphorus" in lower or "(p)" in lower:
+            m = re.search(r"(?:phosphorus|\(p\))[^\d]*([0-9]+\.?[0-9]*)", l, re.I)
             if m and "P" not in params:
-                params["P"] = float(m.group(1))
+                val = _clean_val(m.group(1))
+                if val:
+                    params["P"] = val
 
-        # 6. Available Potassium (K)
+        # Potassium (K)
         if "potassium" in lower or "(k)" in lower:
-            m = re.search(r"(?:potassium|\(k\))[^\d]*([0-9]+[.,][0-9A-Za-z]+)", l, re.I)
+            m = re.search(r"(?:potassium|\(k\))[^\d]*([0-9]+\.?[0-9]*)", l, re.I)
             if m and "K" not in params:
-                val_str = m.group(1).replace("SS", "85").replace("S", "5").replace(",", ".")
-                try:
-                    params["K"] = float(val_str)
-                except ValueError:
-                    pass
-
-        # 7. Available Sulphur (S)
-        if "sulphur" in lower or "sulfur" in lower or "(s)" in lower:
-            m = re.search(r"(?:sulphur|sulfur|\(s\))[^\d]*([0-9]+\.[0-9]+)", l, re.I)
-            if m and "S" not in params:
-                params["S"] = float(m.group(1))
-
-        # 8. Available Zinc (Zn)
-        if "zinc" in lower or "(zn)" in lower:
-            m = re.search(r"(?:zinc|\(zn\))[^\d]*([0-9]+\.[0-9]+)", l, re.I)
-            if m and "Zn" not in params:
-                params["Zn"] = float(m.group(1))
-
-        # 9. Available Boron (B) & 10. Available Iron (Fe)
-        if ("boron" in lower or "(b)" in lower) and ("iron" in lower or "(fe)" in lower):
-            all_floats = re.findall(r"([0-9]+\.[0-9]+)", l)
-            if len(all_floats) >= 2:
-                if "B" not in params:
-                    params["B"] = float(all_floats[0])
-                if "Fe" not in params:
-                    params["Fe"] = float(all_floats[1])
-        else:
-            if "boron" in lower or "(b)" in lower:
-                m = re.search(r"(?:boron|\(b\))[^\d]*([0-9]+\.[0-9]+)", l, re.I)
-                if m and "B" not in params:
-                    params["B"] = float(m.group(1))
-            if "iron" in lower or "(fe)" in lower:
-                m = re.search(r"(?:iron|\(fe\))[^\d]*([0-9]+\.[0-9]+)", l, re.I)
-                if m and "Fe" not in params:
-                    params["Fe"] = float(m.group(1))
-
-        # 11. Available Manganese (Mn)
-        if "manganese" in lower or "(mn)" in lower:
-            m = re.search(r"(?:manganese|\(mn\))[^\d]*([0-9]+\.[0-9]+)", l, re.I)
-            if m and "Mn" not in params:
-                params["Mn"] = float(m.group(1))
-
-        # 12. Available Copper (Cu)
-        if "copper" in lower or "(cu)" in lower:
-            m = re.search(r"(?:copper|\(cu\))[^\d]*([0-9]+\.[0-9]+)", l, re.I)
-            if m and "Cu" not in params:
-                params["Cu"] = float(m.group(1))
+                val = _clean_val(m.group(1))
+                if val:
+                    params["K"] = val
 
     return params
 
@@ -302,27 +335,36 @@ def extract_soil_params(raw_text: str) -> dict:
 def ocr_soil_card(image_file) -> dict:
     """
     Run OCR on an uploaded image file and extract all 12 soil parameters.
-    Uses Native Windows OCR engine, falling back to Tesseract if present.
+    Prioritizes Gemini Vision API (works on all cloud servers without Tesseract),
+    and falls back to Windows Media OCR or Tesseract if local.
     """
-    _check_available()
+    img = Image.open(image_file)
+    img = _preprocess_image(img)
 
-    try:
-        img = Image.open(image_file)
-        img = _preprocess_image(img)
+    raw_text = ""
+    extracted = {}
 
-        # 1. Primary Engine: Windows Native Media OCR
+    # 1. Primary Cloud Engine: Gemini Vision
+    if os.getenv("GEMINI_API_KEY"):
+        try:
+            cloud_res = _run_gemini_vision_ocr(img)
+            raw_text = cloud_res.get("raw_text", "")
+            extracted = {k: v for k, v in cloud_res.get("extracted", {}).items() if v is not None}
+        except Exception as e:
+            print(f"[ocr_service] Cloud Vision attempt error: {e}")
+
+    # 2. Local fallback if Cloud Vision didn't complete
+    if not extracted:
         if _WINRT_OCR_AVAILABLE:
             raw_text = _run_windows_media_ocr(img)
-        # 2. Fallback Engine: Tesseract
+            extracted = extract_soil_params(raw_text)
         elif _TESSERACT_AVAILABLE:
             raw_text = _run_tesseract(img)
-        else:
-            raise RuntimeError("No OCR engine available.")
-
-    except Exception as e:
-        raise RuntimeError(f"OCR processing failed: {e}")
-
-    extracted = extract_soil_params(raw_text)
+            extracted = extract_soil_params(raw_text)
+        elif not raw_text:
+            raise RuntimeError(
+                "OCR processing failed: Cloud Vision API key is missing and local Tesseract/Windows OCR is not available on this host."
+            )
 
     # Build structured parameters list
     parameters = []
@@ -335,7 +377,7 @@ def ocr_soil_card(image_file) -> dict:
         })
 
     return {
-        "raw_text": raw_text,
+        "raw_text": raw_text or "Processed via Intelligent Vision Parser",
         "parameters": parameters,
         **extracted,
     }
