@@ -148,7 +148,4 @@ The agriculture knowledge base (`data/adaptive/`) is open-sourced for research u
 
 ---
 
-## 🏆 Hackathon
 
-Built for **AI Agents Hackathon 2026 — Adaptive Data Track**.  
-Track: Adaptive Agriculture Intelligence using the Adaption platform.
