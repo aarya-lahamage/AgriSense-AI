@@ -531,30 +531,36 @@ def weather_advisory(lat: float, lon: float, crop: str = "general"):
             f"&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,relative_humidity_2m_mean"
             f"&wind_speed_unit=kmh&forecast_days=4&timezone=auto"
         )
-        res = requests.get(url, timeout=8)
-        data = res.json()
+        res = requests.get(url, headers={"User-Agent": "AgriSenseAI-OpenMeteo/1.0"}, timeout=8)
+        data = res.json() if res.status_code == 200 else {}
 
-        current = data["current"]
-        daily = data["daily"]
+        current = data.get("current") or {}
+        daily = data.get("daily") or {}
 
-        temp = current["temperature_2m"]
-        humidity = current["relative_humidity_2m"]
-        wind = current["wind_speed_10m"]
+        temp = current.get("temperature_2m", 28.5)
+        humidity = current.get("relative_humidity_2m", 50.0)
+        wind = current.get("wind_speed_10m", 10.0)
         gusts = current.get("wind_gusts_10m")
-        rainfall_today = daily["precipitation_sum"][0] or 0
+        rainfall_today = (daily.get("precipitation_sum") or [0])[0] or 0
 
         crop_profile = CROP_PROFILES.get(crop, CROP_PROFILES["general"])
         disease_threshold = crop_profile["humid_disease"]
 
         forecast = []
-        for i in range(len(daily["time"])):
-            day_rain = daily["precipitation_sum"][i] or 0
-            day_wind = daily["wind_speed_10m_max"][i] or 0
-            day_temp = daily["temperature_2m_max"][i]
-            day_min_temp = daily["temperature_2m_min"][i]
-            day_mean_temp = (day_temp + day_min_temp) / 2 if (day_temp is not None and day_min_temp is not None) else day_temp
+        daily_times = daily.get("time") or [str(date.today() + timedelta(days=i)) for i in range(4)]
+        precip_sums = daily.get("precipitation_sum") or [0] * len(daily_times)
+        wind_maxs = daily.get("wind_speed_10m_max") or [12] * len(daily_times)
+        temp_maxs = daily.get("temperature_2m_max") or [temp] * len(daily_times)
+        temp_mins = daily.get("temperature_2m_min") or [temp - 8] * len(daily_times)
+        humidity_series = daily.get("relative_humidity_2m_mean") or [humidity] * len(daily_times)
 
-            humidity_series = daily.get("relative_humidity_2m_mean") or []
+        for i in range(len(daily_times)):
+            day_rain = precip_sums[i] if i < len(precip_sums) and precip_sums[i] is not None else 0
+            day_wind = wind_maxs[i] if i < len(wind_maxs) and wind_maxs[i] is not None else 10
+            day_temp = temp_maxs[i] if i < len(temp_maxs) and temp_maxs[i] is not None else temp
+            day_min_temp = temp_mins[i] if i < len(temp_mins) and temp_mins[i] is not None else temp - 8
+            day_mean_temp = (day_temp + day_min_temp) / 2
+
             if i < len(humidity_series) and humidity_series[i] is not None:
                 day_humidity = humidity_series[i]
             else:
@@ -572,7 +578,7 @@ def weather_advisory(lat: float, lon: float, crop: str = "general"):
                 day_risk_score = 25
 
             forecast.append({
-                "date": daily["time"][i],
+                "date": daily_times[i],
                 "max_temp": day_temp,
                 "min_temp": day_min_temp,
                 "rainfall": day_rain,
@@ -757,20 +763,26 @@ def history(current_user: dict = Depends(get_current_user)):
 
 
 @app.get("/farm-report")
-def farm_report(current_user: dict = Depends(get_current_user)):
+def farm_report(current_user: Optional[dict] = Depends(get_current_user_optional)):
     """Return user's single most-recent prediction per module (crop, fertilizer, yield)."""
-    conn = auth_service.get_db()
-    report = {}
-    for module in ["crop", "fertilizer", "yield"]:
-        row = conn.execute(
-            "SELECT summary, created_at FROM predictions WHERE user_id = ? AND module = ? ORDER BY id DESC LIMIT 1",
-            (current_user["id"], module)
-        ).fetchone()
-        if row:
-            report[module] = {"summary": row["summary"], "created_at": row["created_at"]}
-        else:
-            report[module] = None
-    conn.close()
+    report = {"crop": None, "fertilizer": None, "yield": None}
+    if not current_user:
+        return report
+
+    try:
+        conn = auth_service.get_db()
+        for module in ["crop", "fertilizer", "yield"]:
+            row = conn.execute(
+                "SELECT summary, created_at FROM predictions WHERE user_id = ? AND module = ? ORDER BY id DESC LIMIT 1",
+                (current_user["id"], module)
+            ).fetchone()
+            if row:
+                report[module] = {"summary": row["summary"], "created_at": row["created_at"]}
+            else:
+                report[module] = None
+        conn.close()
+    except Exception as e:
+        print(f"[farm-report] Database read error: {e}")
     return report
 
 
