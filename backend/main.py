@@ -201,8 +201,10 @@ def resolve_location(lat: float = None, lon: float = None, place: str = None, di
         temperature = weather_data["current"]["temperature_2m"]
         humidity = weather_data["current"]["relative_humidity_2m"]
         rainfall = _get_annual_rainfall(lat, lon)
-    except Exception:
-        raise HTTPException(status_code=503, detail="Weather service unavailable")
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=503, detail=f"Location service error: {exc}")
 
     return {
         "place": place_name,
@@ -528,8 +530,10 @@ def weather_advisory(lat: float, lon: float, crop: str = "general"):
         }
     except HTTPException:
         raise
-    except Exception:
-        raise HTTPException(status_code=503, detail="Weather service unavailable")
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=503, detail=f"Weather service unavailable: {exc}")
 
 
 class FertilizerInput(BaseModel):
